@@ -1,0 +1,3 @@
+# Angular starter reference
+
+Progress tracker is a standalone Angular component using modern template control flow and signals; confirm the actual Angular version, strict templates and repository tooling before copying. It renders stages supplied by the API, not fabricated from ticket status. The sample supports keyboard focus/click as well as visual context; integrate real overlays/ARIA and focus management using existing UI dependencies where available. Extend to parallel branch visualization and reduced-motion testing. No API or runtime application skeleton was available for integration in this environment.

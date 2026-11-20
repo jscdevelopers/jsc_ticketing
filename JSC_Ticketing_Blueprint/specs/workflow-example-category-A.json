@@ -1,0 +1,233 @@
+{
+  "code": "general_cross_department",
+  "version": 1,
+  "owner_department": "Service Coordination",
+  "category_code": "GEN",
+  "initiators": {
+    "type": "everyone"
+  },
+  "published_policy": {
+    "allow_loops": false,
+    "default_timezone": "Africa/Harare",
+    "require_second_approver": true
+  },
+  "notes": "Illustrative config; department and position identifiers must be mapped to actual JSC directory keys.",
+  "intake_schema": {
+    "type": "object",
+    "required": [
+      "subject",
+      "description",
+      "category"
+    ],
+    "properties": {
+      "subject": {
+        "type": "string",
+        "minLength": 8
+      },
+      "description": {
+        "type": "string",
+        "minLength": 15
+      },
+      "category": {
+        "type": "string"
+      }
+    }
+  },
+  "cc_rules": [
+    {
+      "when": {
+        "eq": [
+          {
+            "var": "ticket.category"
+          },
+          "A"
+        ]
+      },
+      "department": "Department Y",
+      "visibility": "internal_summary_only",
+      "notify": true
+    }
+  ],
+  "sla": {
+    "calendar_id": "JSC_BUSINESS_HOURS_TO_CONFIGURE",
+    "claim_hours": 4,
+    "response_hours": 8,
+    "resolution_hours": 72
+  },
+  "nodes": [
+    {
+      "id": "start",
+      "type": "start",
+      "label": "Submitted"
+    },
+    {
+      "id": "validate",
+      "type": "intake",
+      "label": "Validate intake"
+    },
+    {
+      "id": "category",
+      "type": "decision",
+      "label": "Category A?"
+    },
+    {
+      "id": "route_x",
+      "type": "route",
+      "label": "Route to Department X",
+      "config": {
+        "department_code": "DEPT_X",
+        "geography": "origin_station_or_configured_fallback",
+        "candidate_position_code": "TARGET_POSITION"
+      }
+    },
+    {
+      "id": "route_default",
+      "type": "route",
+      "label": "Route to category owner",
+      "config": {
+        "department_code": "CATEGORY_OWNER",
+        "geography": "origin_province",
+        "candidate_position_code": "TRIAGE_OFFICER"
+      }
+    },
+    {
+      "id": "work",
+      "type": "claim_pool",
+      "label": "Claim and process",
+      "config": {
+        "candidate_source": "active_assignees_of_position_and_scope",
+        "claim_mode": "first_successful_claim",
+        "department_code": "CURRENT_RESPONSIBLE",
+        "on_zero_recipients": "route_exception_queue"
+      }
+    },
+    {
+      "id": "fork",
+      "type": "parallel_fork",
+      "label": "Independent reviews",
+      "config": {
+        "join_id": "join"
+      }
+    },
+    {
+      "id": "finance",
+      "type": "approval",
+      "label": "Finance review",
+      "config": {
+        "department_code": "FINANCE",
+        "candidate_position_code": "FINANCE_REVIEWER",
+        "one_approval_per_task": true
+      }
+    },
+    {
+      "id": "legal",
+      "type": "approval",
+      "label": "Legal review",
+      "config": {
+        "department_code": "LEGAL",
+        "candidate_position_code": "LEGAL_REVIEWER",
+        "one_approval_per_task": true
+      }
+    },
+    {
+      "id": "join",
+      "type": "parallel_join",
+      "label": "Both reviews complete",
+      "config": {
+        "mode": "all",
+        "expected_branches": [
+          "finance",
+          "legal"
+        ],
+        "separation_of_duties": true
+      }
+    },
+    {
+      "id": "final",
+      "type": "approval",
+      "label": "Final authorized approval",
+      "config": {
+        "scope": "national_if_granted_else_valid_provincial_authority"
+      }
+    },
+    {
+      "id": "resolved",
+      "type": "resolve",
+      "label": "Resolved"
+    },
+    {
+      "id": "end",
+      "type": "end",
+      "label": "Closed"
+    }
+  ],
+  "edges": [
+    {
+      "from": "start",
+      "to": "validate"
+    },
+    {
+      "from": "validate",
+      "to": "category"
+    },
+    {
+      "from": "category",
+      "to": "route_x",
+      "label": "A",
+      "when": {
+        "eq": [
+          {
+            "var": "ticket.category"
+          },
+          "A"
+        ]
+      }
+    },
+    {
+      "from": "category",
+      "to": "route_default",
+      "label": "Other",
+      "otherwise": true
+    },
+    {
+      "from": "route_x",
+      "to": "work"
+    },
+    {
+      "from": "route_default",
+      "to": "work"
+    },
+    {
+      "from": "work",
+      "to": "fork"
+    },
+    {
+      "from": "fork",
+      "to": "finance"
+    },
+    {
+      "from": "fork",
+      "to": "legal"
+    },
+    {
+      "from": "finance",
+      "to": "join"
+    },
+    {
+      "from": "legal",
+      "to": "join"
+    },
+    {
+      "from": "join",
+      "to": "final"
+    },
+    {
+      "from": "final",
+      "to": "resolved"
+    },
+    {
+      "from": "resolved",
+      "to": "end"
+    }
+  ]
+}

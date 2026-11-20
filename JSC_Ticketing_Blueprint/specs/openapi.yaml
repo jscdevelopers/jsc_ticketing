@@ -1,0 +1,154 @@
+openapi: 3.1.0
+info:
+  title: JSC Ticketing API - design contract
+  version: 0.1.0-blueprint
+  description: >-
+    Proposed contract only; adapt to the actual inspected Nite framework.
+    All read/write operations require record-level permissions and scope evaluation.
+servers:
+  - url: /api/v1
+security:
+  - bearerAuth: []
+components:
+  securitySchemes:
+    bearerAuth: {type: http, scheme: bearer}
+  schemas:
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code: {type: string}
+        message: {type: string}
+        request_id: {type: string}
+    TicketCreate:
+      type: object
+      required: [category_id, subject, description]
+      additionalProperties: false
+      properties:
+        category_id: {type: string, format: uuid}
+        subject: {type: string, minLength: 3, maxLength: 255}
+        description: {type: string, minLength: 1}
+        priority: {type: string, enum: [low, normal, high, critical]}
+        fields: {type: object, additionalProperties: true}
+        cc_departments: {type: array, items: {type: string, format: uuid}}
+    ClaimResult:
+      type: object
+      required: [task_id, ticket_id, claimed_by, status, version]
+      properties:
+        task_id: {type: string, format: uuid}
+        ticket_id: {type: string, format: uuid}
+        claimed_by: {type: string, format: uuid}
+        status: {const: claimed}
+        version: {type: integer}
+paths:
+  /me:
+    get:
+      summary: Effective current profile and allowed lenses
+      responses:
+        '200': {description: Effective user profile}
+        '401': {description: Not authenticated}
+  /tickets:
+    get:
+      summary: Scoped ticket list
+      parameters:
+        - in: query
+          name: cursor
+          schema: {type: string}
+        - in: query
+          name: status
+          schema: {type: string}
+      responses:
+        '200': {description: Paginated, authorized tickets only}
+        '403': {description: Forbidden scope}
+    post:
+      summary: Idempotent submission and initial workflow routing
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: {type: string, minLength: 1, maxLength: 128}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/TicketCreate'}
+      responses:
+        '201': {description: Ticket created}
+        '409': {description: Conflicting idempotency key}
+        '422': {description: Invalid form or unresolved route}
+  /tickets/{ticket_id}:
+    get:
+      summary: Scoped ticket detail
+      parameters:
+        - in: path
+          name: ticket_id
+          required: true
+          schema: {type: string, format: uuid}
+      responses:
+        '200': {description: Permitted ticket fields}
+        '403': {description: Forbidden}
+        '404': {description: Not found or not visible}
+  /tickets/{ticket_id}/timeline:
+    get:
+      summary: Permission-filtered business events and actions
+      parameters:
+        - in: path
+          name: ticket_id
+          required: true
+          schema: {type: string, format: uuid}
+      responses:
+        '200': {description: Chronological events}
+  /tickets/{ticket_id}/progress:
+    get:
+      summary: Milestones, branches and authorized stage details
+      parameters:
+        - in: path
+          name: ticket_id
+          required: true
+          schema: {type: string, format: uuid}
+      responses:
+        '200': {description: Branch-aware progress structure}
+  /tasks/{task_id}/claim:
+    post:
+      summary: First eligible claimant wins using PostgreSQL row lock
+      parameters:
+        - in: path
+          name: task_id
+          required: true
+          schema: {type: string, format: uuid}
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: {type: string, minLength: 1, maxLength: 128}
+      responses:
+        '200':
+          description: Claimed or an exact idempotent replay
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ClaimResult'}
+        '403': {description: Not currently eligible or authorized}
+        '409': {description: Already claimed or conflicting workflow state}
+  /workflows/{workflow_id}/simulate:
+    post:
+      summary: Safe dry-run trace, no task creation
+      parameters:
+        - in: path
+          name: workflow_id
+          required: true
+          schema: {type: string, format: uuid}
+      responses:
+        '200': {description: Route diagnostics and candidate resolution}
+        '422': {description: Invalid or unresolvable route}
+  /dashboards:
+    get:
+      summary: Permission-scoped dashboard KPI lens
+      parameters:
+        - in: query
+          name: scope_type
+          schema: {type: string, enum: [user, station, province, department, national]}
+        - in: query
+          name: scope_id
+          schema: {type: string, format: uuid}
+      responses:
+        '200': {description: Scope-filtered aggregate counts}
+        '403': {description: National or other scope not granted}

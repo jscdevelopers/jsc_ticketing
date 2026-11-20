@@ -1,0 +1,342 @@
+{
+  "name": "JSC Ticketing Comprehensive Blueprint",
+  "prepared": "2026-11-20",
+  "kind": "design + implementation specification + code examples (not production software)",
+  "files": [
+    {
+      "path": "AGENTS.md",
+      "size": 9029,
+      "sha256": "84101ecc5e8505e10374845e59d5fe8556849bcb30ad45d1d3c96e1c886c74b2"
+    },
+    {
+      "path": "README.md",
+      "size": 4586,
+      "sha256": "26adde20a2585480ce0f08175bea1febaaaffc017dde74b599ddb406d2315dd3"
+    },
+    {
+      "path": "START_HERE_FOR_CODEX.md",
+      "size": 2596,
+      "sha256": "b347d447e499722f266d2677ba7c356161ffd475fc4ef8e3c4662552948fd390"
+    },
+    {
+      "path": "backend/examples/README.md",
+      "size": 1109,
+      "sha256": "f6091a2676a9b6c737aa6d14ff9f0663d158e0504147fd3245298aea19e3c464"
+    },
+    {
+      "path": "backend/examples/TicketClaimService.php",
+      "size": 6768,
+      "sha256": "2eb4164d878cc10d9c3407cf3043e87a34761c34d02663ad77b332625ae31c56"
+    },
+    {
+      "path": "database/001_foundation.sql",
+      "size": 12458,
+      "sha256": "8cc50bca519b598a3ada38758a5d8eaa4b198f9991d08617301e1e09dc22663f"
+    },
+    {
+      "path": "deploy/README.md",
+      "size": 575,
+      "sha256": "07024a7685037fb7f6e0ada849ab5ae744f9ae6b3a6d4b312fe130b3e9178cfa"
+    },
+    {
+      "path": "deploy/compose.example.yml",
+      "size": 1505,
+      "sha256": "8f2af3b0c9ce0c21a314acb1b9ec2bcf6e2bcc8e5a8df440b5a1cdfd274c784a"
+    },
+    {
+      "path": "deploy/env.example",
+      "size": 210,
+      "sha256": "fe41e69a3dddd60bd71233df23622498ef983f3392a2e76a4b1c69cfb5992e7d"
+    },
+    {
+      "path": "designs/concepts/README.md",
+      "size": 713,
+      "sha256": "ce05f84742902a1b93478236aed856b05ba654b35699ee7f2186d771824f4b03"
+    },
+    {
+      "path": "designs/concepts/concept_01.png",
+      "size": 1888462,
+      "sha256": "f8bd5e2b5fb6f7c436fb339da89385577714396866fcfc943bf9425d052758d5"
+    },
+    {
+      "path": "designs/concepts/concept_02.png",
+      "size": 1835259,
+      "sha256": "188805b37d3ec62a89366b5b65c11d40f33b0726dee71d84a175b2685bc91603"
+    },
+    {
+      "path": "designs/concepts/concept_03.png",
+      "size": 1864747,
+      "sha256": "bb857e002bfc3b8dc079d20dfa805fa07077e4f39e4a898d6e098f4559ec9a23"
+    },
+    {
+      "path": "designs/gallery.html",
+      "size": 2894,
+      "sha256": "8c0755bda2085f366426903af51a907fc5c49ed85cce27b43b98539509c432f5"
+    },
+    {
+      "path": "designs/prototype/index.html",
+      "size": 37649,
+      "sha256": "24074fa8fbc1a241ec9258dee103ef22f39e78083625995d4fa33d9d992b3c43"
+    },
+    {
+      "path": "designs/vector/01_org_authority.png",
+      "size": 69910,
+      "sha256": "41c5d993c62ea89e7e2f1a5c30cdb48582aae6d133a47d135ca8f22f619d1911"
+    },
+    {
+      "path": "designs/vector/01_org_authority.svg",
+      "size": 4259,
+      "sha256": "9b8dffe3aa358b8db09c02a38e74abc6acb9a85b8fa08964ee192784628b6cbb"
+    },
+    {
+      "path": "designs/vector/02_workflow_paths.png",
+      "size": 87621,
+      "sha256": "208c88cade5d99e7d6e9df2b9d6ec9b120b786eafbce9c6390702825028f7b5b"
+    },
+    {
+      "path": "designs/vector/02_workflow_paths.svg",
+      "size": 6741,
+      "sha256": "b6aa578b69251e24b3d7977bbe79e8072fe15c467e13ebab426a3bf8ff246680"
+    },
+    {
+      "path": "designs/vector/03_ticket_progress.png",
+      "size": 89852,
+      "sha256": "17e4b6cdc80a7312c10fea867913b43d80c280aa7cd0518e203afa786f0e56d7"
+    },
+    {
+      "path": "designs/vector/03_ticket_progress.svg",
+      "size": 5970,
+      "sha256": "0cfe5e4532ee173ffa59dcce725875cd92e3172f8970ad360a9a377ec65cc617"
+    },
+    {
+      "path": "designs/vector/04_dashboard_screen.png",
+      "size": 123503,
+      "sha256": "98b05df3791573bb9dd3a0081aff8e02da56f084e5609e5e6db1636d43a2e1a0"
+    },
+    {
+      "path": "designs/vector/04_dashboard_screen.svg",
+      "size": 14410,
+      "sha256": "3deaa9e435ea17af616a5ee4760657a07c5420c1c52c03ec5076376d98aee0e4"
+    },
+    {
+      "path": "designs/vector/05_ticket_screen.png",
+      "size": 119941,
+      "sha256": "c9223b85166004cf93a8ee527981f45a8231e0ef9493da2c8711202114a8d667"
+    },
+    {
+      "path": "designs/vector/05_ticket_screen.svg",
+      "size": 9491,
+      "sha256": "ad29f5825c2935983e844e48216cf89c6efab647d3041d244e787b37e115535e"
+    },
+    {
+      "path": "designs/vector/06_workflow_wizard_screen.png",
+      "size": 124443,
+      "sha256": "5fa6b4971670078db7783b254eb0be03771b9508d418a9d50baf1f233714d913"
+    },
+    {
+      "path": "designs/vector/06_workflow_wizard_screen.svg",
+      "size": 11899,
+      "sha256": "97efa5ad38a53e7019aea797fc5f00fbc998602079e31b542136e18451011a2a"
+    },
+    {
+      "path": "docs/01_requirements.md",
+      "size": 7196,
+      "sha256": "bb23a946bdf804181f7c121cbe0ec4c3f7588d06792c2ba6e9f4edc52db4b52d"
+    },
+    {
+      "path": "docs/02_organization_access.md",
+      "size": 5007,
+      "sha256": "93e1593a4c7053e5ac11df88cd7f2eda5b7182df4c6c58fe60bdcdd73d800897"
+    },
+    {
+      "path": "docs/03_workflow_engine.md",
+      "size": 6031,
+      "sha256": "8c12bab978a8e58d591b889135f6e15dadb93557b96a51395733e0fb39c292b3"
+    },
+    {
+      "path": "docs/04_example_processes.md",
+      "size": 2905,
+      "sha256": "e28d38c47742e55ca0d9d6855fd01c666750818160b41b725bfd19ef4782c5e1"
+    },
+    {
+      "path": "docs/05_ux_design.md",
+      "size": 4305,
+      "sha256": "4cedc775d4498bd423fa651fa2269cc988aff6eebde692bc1662bead05c4e6f1"
+    },
+    {
+      "path": "docs/06_analytics_notifications.md",
+      "size": 2833,
+      "sha256": "1defda757486b6b83557bd6b761d4e2f0d1291b05946cedb792a41b8f0c939d3"
+    },
+    {
+      "path": "docs/07_architecture.md",
+      "size": 3745,
+      "sha256": "129d00260498c73aa7d652d888a3ff0c2ad244bf70c6eaf9730e08cd672d760a"
+    },
+    {
+      "path": "docs/08_security_governance.md",
+      "size": 3098,
+      "sha256": "020cb5c7c154c7046251f653df75189f737c0fc0233e7654a740772561099854"
+    },
+    {
+      "path": "docs/09_test_acceptance.md",
+      "size": 2928,
+      "sha256": "c8f1123775d92069c5110b08dfa898b2865fd653901b13cb617c6e10f70485de"
+    },
+    {
+      "path": "docs/10_roadmap.md",
+      "size": 1841,
+      "sha256": "765e4b2a38ddf4b5e5c76517372134676ba8afb27ab4d9a551fdeaa269364eb1"
+    },
+    {
+      "path": "docs/11_research_sources.md",
+      "size": 3515,
+      "sha256": "641c51001e0bd7df93e79e3423099d55679661a598ad7c95b836f6290ca4f3e8"
+    },
+    {
+      "path": "docs/12_integration_discovery.md",
+      "size": 2581,
+      "sha256": "be7fab4e7adcab727a8a7309bd7f9b8df0bc5d4f89bbaab6be2a508e1816b3db"
+    },
+    {
+      "path": "docs/13_api_contract.md",
+      "size": 3625,
+      "sha256": "765bf98f60374125c090712f2105f3de82598e3e20a00bd5fa2ea15ed7507286"
+    },
+    {
+      "path": "docs/14_operational_runbook.md",
+      "size": 1192,
+      "sha256": "4c1cfc0d882e5c735a7f1049d50ffa5f702797a417c826d624a9d3f7b7820055"
+    },
+    {
+      "path": "frontend/angular-reference/README.md",
+      "size": 618,
+      "sha256": "886f757dd9397c5d83e477b4211b3d057a694c60e17ca8f5ff9fd20c7f00e99c"
+    },
+    {
+      "path": "frontend/angular-reference/progress-tracker.component.ts",
+      "size": 3222,
+      "sha256": "3d407b4cdc6e734db1dc31c59e25fd5b7eaccf95bff21508263decf1da67fa82"
+    },
+    {
+      "path": "reference_photos/README.md",
+      "size": 898,
+      "sha256": "ea536c43cd97f3748ad9cdc8883281a167957c68e01c76a4efd399ef8f1736d3"
+    },
+    {
+      "path": "reference_photos/enhanced/photo_01_enhanced.jpg",
+      "size": 475854,
+      "sha256": "8495bd8c89b38f59c907a9733c4a51602e2d254bc3c1ab7b03f6513475e25869"
+    },
+    {
+      "path": "reference_photos/enhanced/photo_02_enhanced.jpg",
+      "size": 468165,
+      "sha256": "688f3677b806ec374af3ce93a18b9ab71389efce85ed8b9124bc0a247c843ae7"
+    },
+    {
+      "path": "reference_photos/enhanced/photo_03_enhanced.jpg",
+      "size": 527534,
+      "sha256": "138a60c300d2ed9297592b078a1980fd20819dcef799c41b2ed6856808c0f987"
+    },
+    {
+      "path": "reference_photos/enhanced/photo_04_enhanced.jpg",
+      "size": 460901,
+      "sha256": "986475584e52f8931f1dfb06ee4366c9eb6f92538ac72c1bed9eb3912405a8c2"
+    },
+    {
+      "path": "reference_photos/enhanced/photo_05_enhanced.jpg",
+      "size": 484042,
+      "sha256": "184e82faa1696cd8f67a4790f6136850f546b5b2fa0a014f4c46d62ffd9bb7aa"
+    },
+    {
+      "path": "reference_photos/enhanced/photo_06_enhanced.jpg",
+      "size": 542799,
+      "sha256": "c39b100b7724f89a5688d20d811a2859afbd2c24227acb61158006c92e126367"
+    },
+    {
+      "path": "reference_photos/enhanced/photo_07_enhanced.jpg",
+      "size": 361022,
+      "sha256": "2f3e8bb726cd04b6f5bfe88375d8385d5bc2566b322d0395073dee946b59c017"
+    },
+    {
+      "path": "reference_photos/original/WhatsApp Image 2026-11-20 at 09.23.24.jpeg",
+      "size": 35583,
+      "sha256": "4690d7dd372cda2d4c9aa06eb9eecc6d5345e4ae7f7d1341b54745542e436473"
+    },
+    {
+      "path": "reference_photos/original/WhatsApp Image 2026-11-20 at 09.23.25 (1).jpeg",
+      "size": 36951,
+      "sha256": "5a2234b17e326d73683f82bb624980f0e2e1d482feaa9dfa903bcebe7ed7af45"
+    },
+    {
+      "path": "reference_photos/original/WhatsApp Image 2026-11-20 at 09.23.25.jpeg",
+      "size": 43401,
+      "sha256": "6a0478916ff769f52685312a01ea37d905b3647a604ce05514a75865e56fc5ee"
+    },
+    {
+      "path": "reference_photos/original/WhatsApp Image 2026-11-20 at 09.23.26 (1).jpeg",
+      "size": 36756,
+      "sha256": "21ea31905dc49eefb9ac7f68ffab85f49f5e363c14b09c53b6b35e975fbac563"
+    },
+    {
+      "path": "reference_photos/original/WhatsApp Image 2026-11-20 at 09.23.26 (2).jpeg",
+      "size": 38203,
+      "sha256": "0fafc275bb26a6287e475c780404b9d841ec511f437f6a6de44da1d50b28f8bb"
+    },
+    {
+      "path": "reference_photos/original/WhatsApp Image 2026-11-20 at 09.23.26.jpeg",
+      "size": 42945,
+      "sha256": "fa99a24bd2b0169289e928d8645a793dc09bbc0ec48c65989553892cc5ad4790"
+    },
+    {
+      "path": "reference_photos/original/WhatsApp Image 2026-11-20 at 09.23.27.jpeg",
+      "size": 28873,
+      "sha256": "063763487ebebd80e2f164fbedc4315779037ff80595e33b1b17838e0b3ae616"
+    },
+    {
+      "path": "reference_photos/reference_comparison.jpg",
+      "size": 572829,
+      "sha256": "6b29d561db19168e7f6c6357fb3bf369f24f7092323b709f58fe383a9ee83e3e"
+    },
+    {
+      "path": "reference_photos/reference_manifest.json",
+      "size": 1225,
+      "sha256": "ae5bb882cf68327e37975594a7c4697ca439c774f8c097b22388cd662c53df27"
+    },
+    {
+      "path": "scripts/workflow_validator.py",
+      "size": 5641,
+      "sha256": "d8fd042a9f29ec3bb185fd1768d7691e8d5cc7674121bbe25df9e1b55418612b"
+    },
+    {
+      "path": "specs/openapi.yaml",
+      "size": 5128,
+      "sha256": "ca1ae53ad24865ab5c92ccc8c4d25b30751ce172a8cf07b28e772b43205870c0"
+    },
+    {
+      "path": "specs/sample-scope-actors.json",
+      "size": 1215,
+      "sha256": "a87961eb98d1d3c92917fef76ae5adc411bb4a4125eda1e489d9ff371654afdd"
+    },
+    {
+      "path": "specs/workflow-definition.schema.json",
+      "size": 3389,
+      "sha256": "06a1e2b9c445cf8975863f4257c81951dc9fdc3d3a97602c505f94aaaed1209d"
+    },
+    {
+      "path": "specs/workflow-example-category-A.json",
+      "size": 4692,
+      "sha256": "a2aabe481f84044fc90d28272298e84d39186e0ec21b23cf9b3b77bcd184d29c"
+    },
+    {
+      "path": "tests/VALIDATION_STATUS.md",
+      "size": 1632,
+      "sha256": "e8ca5176d3f5cae31c71bb0fd7e8853ae0616add60cfdb9110b9edb228b3bfcb"
+    },
+    {
+      "path": "tests/test_workflow_validator.py",
+      "size": 2199,
+      "sha256": "4a470226518d2d5206ee211dbeb8ff627134c74d91b01e2851fe0ca4ec94b9ff"
+    }
+  ]
+}

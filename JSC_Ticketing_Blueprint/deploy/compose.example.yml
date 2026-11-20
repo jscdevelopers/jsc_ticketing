@@ -1,0 +1,46 @@
+# Infrastructure DESIGN EXAMPLE ONLY. Inspect T:\source\work\hrms\ first.
+# PostgreSQL service remains private; API image and scripts are placeholders.
+name: jsc-ticketing
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?set_POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER:?set_POSTGRES_USER}
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+    secrets: [db_password]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    networks: [private]
+  api:
+    # Replace only after implementing a real Dockerfile against verified Nite source.
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      APP_ENV: production
+      DB_HOST: postgres
+      DB_PORT: '5432'
+      POSTGRES_DB: ${POSTGRES_DB:?set_POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER:?set_POSTGRES_USER}
+      DB_PASSWORD_FILE: /run/secrets/db_password
+    secrets: [db_password]
+    depends_on:
+      postgres: {condition: service_healthy}
+    networks: [private,frontend]
+    # No published port until secured reverse proxy design is approved.
+secrets:
+  db_password:
+    file: ./secrets/db_password.txt  # create outside VCS, chmod 0600; not included
+volumes:
+  pgdata: {}
+networks:
+  private: {internal: true}
+  frontend: {}

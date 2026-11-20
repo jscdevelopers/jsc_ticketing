@@ -1,0 +1,60 @@
+{
+  "note": "Sample identities only; no real staff data. Secretariat physical station does not imply national permission.",
+  "actors": [
+    {
+      "id": "staff_1",
+      "name": "Alex Moyo",
+      "station": "Secretariat",
+      "positions": [
+        "Records Clerk"
+      ],
+      "roles": [
+        "staff"
+      ],
+      "scopes": [
+        {
+          "type": "station",
+          "id": "secretariat-station"
+        }
+      ],
+      "can_view_national": false
+    },
+    {
+      "id": "staff_2",
+      "name": "Jordan Dube",
+      "station": "Station East",
+      "positions": [
+        "National Monitoring Officer"
+      ],
+      "roles": [
+        "oversight"
+      ],
+      "scopes": [
+        {
+          "type": "national",
+          "grant_by": "approved-authority",
+          "expires_at": "2027-01-01"
+        }
+      ],
+      "can_view_national": true
+    },
+    {
+      "id": "staff_3",
+      "name": "Mira Ndlovu",
+      "station": "Station East",
+      "positions": [
+        "ICT Officer"
+      ],
+      "roles": [
+        "agent"
+      ],
+      "scopes": [
+        {
+          "type": "station",
+          "id": "east-station"
+        }
+      ],
+      "can_view_national": false
+    }
+  ]
+}
