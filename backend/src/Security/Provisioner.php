@@ -102,6 +102,37 @@ final class Provisioner
         });
     }
 
+    public function grantSubmit(string $userId, string $reason): void
+    {
+        $this->id($userId);
+        $this->reason($reason);
+        $this->transaction(function () use ($userId, $reason): void {
+            $query = $this->db->prepare('SELECT id FROM app_users WHERE id=? AND active FOR UPDATE');
+            $query->execute([$userId]);
+            if (!$query->fetchColumn()) {
+                throw new InvalidArgumentException('Active user required.');
+            }
+            $changed = false;
+            $query = $this->db->prepare("INSERT INTO user_roles(user_id,role_id)
+                SELECT ?,r.id FROM roles r WHERE r.code='ticket_requester'
+                AND NOT EXISTS (SELECT 1 FROM user_roles ur WHERE ur.user_id=CAST(? AS uuid) AND ur.role_id=r.id
+                    AND ur.valid_from<=statement_timestamp() AND (ur.valid_to IS NULL OR ur.valid_to>statement_timestamp()))");
+            $query->execute([$userId,$userId]);
+            $changed = $query->rowCount() > 0;
+            foreach (['ticket.create','ticket.read'] as $permission) {
+                $query = $this->db->prepare("INSERT INTO scope_grants(user_id,permission_code,scope_kind,grant_reason)
+                    SELECT CAST(? AS uuid),?,'self',? WHERE NOT EXISTS (SELECT 1 FROM scope_grants
+                        WHERE user_id=CAST(? AS uuid) AND permission_code=? AND scope_kind='self' AND revoked_at IS NULL
+                        AND valid_from<=statement_timestamp() AND (valid_to IS NULL OR valid_to>statement_timestamp()))");
+                $query->execute([$userId,$permission,$reason,$userId,$permission]);
+                $changed = $query->rowCount() > 0 || $changed;
+            }
+            if ($changed) {
+                $this->audit('SUBMISSION_ACCESS_GRANTED', $userId, $reason);
+            }
+        });
+    }
+
     public function importDirectory(array $data, bool $dryRun): array
     {
         $fields = [

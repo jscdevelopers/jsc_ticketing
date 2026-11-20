@@ -73,7 +73,7 @@ final class TicketReader
         }
         $statement = $this->db->prepare('SELECT t.id,t.reference,t.subject,t.description,t.custom_fields,
             t.status,t.priority,t.confidentiality,t.origin_station_id,t.origin_province_id,t.origin_department_id,
-            t.responsible_department_id,t.workflow_version_id,t.created_at,t.updated_at,t.version
+            t.responsible_department_id,t.workflow_version_id,t.origin_assignment_id,t.origin_position_id,t.requester_snapshot,t.created_at,t.updated_at,t.version
             FROM tickets t WHERE t.id=CAST(:id AS uuid) AND ' . TicketScope::predicate());
         $statement->execute(['id' => $id, 'actor' => $actor]);
         $ticket = $statement->fetch();
@@ -81,11 +81,36 @@ final class TicketReader
             throw new ApiException(404, 'ticket_unavailable', 'Ticket unavailable.');
         }
         $ticket['custom_fields'] = json_decode($ticket['custom_fields'], false, 512, JSON_THROW_ON_ERROR);
+        $ticket['requester_snapshot'] = json_decode($ticket['requester_snapshot'], false, 32, JSON_THROW_ON_ERROR);
         return $ticket;
     }
 
     public static function uuid(string $value): bool
     {
         return (bool)preg_match('/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/iD', $value);
+    }
+
+    public function timeline(string $actor, string $id, array $query): array
+    {
+        if (array_diff(array_keys($query), ['after']) || (isset($query['after'])
+            && (!is_string($query['after']) || !preg_match('/^[0-9]{1,18}$/D', $query['after'])))) {
+            throw new ApiException(422, 'invalid_cursor', 'Timeline after must be a non-negative event ID.');
+        }
+        $this->detail($actor, $id);
+        $statement = $this->db->prepare("SELECT e.id,e.event_type,e.actor_user_id,e.from_state,e.to_state,e.event_data,e.occurred_at
+            FROM ticket_events e JOIN tickets t ON t.id=e.ticket_id
+            WHERE t.id=CAST(:id AS uuid) AND e.id>CAST(:after AS bigint) AND e.visibility='internal'
+            AND " . TicketScope::predicate() . ' ORDER BY e.id LIMIT 11');
+        $statement->execute(['id'=>$id,'actor'=>$actor,'after'=>$query['after'] ?? '0']);
+        $rows = $statement->fetchAll();
+        $more = count($rows) > 10;
+        if ($more) {
+            array_pop($rows);
+        }
+        $last = end($rows);
+        foreach ($rows as &$row) {
+            $row['event_data'] = json_decode($row['event_data'], false, 32, JSON_THROW_ON_ERROR);
+        }
+        return ['data'=>$rows,'meta'=>['next_after'=>$more ? (string)$last['id'] : null,'limit'=>10]];
     }
 }

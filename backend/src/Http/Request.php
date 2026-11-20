@@ -47,8 +47,12 @@ final class Request
         $parseError = null;
         if (str_contains($contentType, 'application/json')) {
             $decoded = json_decode($rawBody, true);
-            if (is_array($decoded)) {
+            $object = json_decode($rawBody);
+            if (is_array($decoded) && is_object($object)) {
                 $body = $decoded;
+                if (property_exists($object, 'fields') && !is_object($object->fields)) {
+                    $parseError = 'Fields must be a JSON object.';
+                }
             } elseif (trim($rawBody) !== '') {
                 $parseError = 'Malformed JSON request body.';
             }

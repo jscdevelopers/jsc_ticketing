@@ -46,9 +46,36 @@ function callApi(string $path, ?string $token = null, array $query = [], string 
 }
 try {
     $migrator = new Migrator($db, $root . '/database');
-    expect(count($migrator->run()) === 2, 'fresh migrations apply');
+    expect(count($migrator->run()) === 3, 'fresh migrations apply');
     expect($migrator->run() === [], 'repeat migration is a no-op');
-    expect((int)sql('SELECT count(*) FROM schema_migrations')->fetchColumn() === 2, 'migration ledger persisted');
+    expect((int)sql('SELECT count(*) FROM schema_migrations')->fetchColumn() === 3, 'migration ledger persisted');
+    $upgradeSchema = $schema . '_upgrade';
+    $upgradeDirectory = sys_get_temp_dir() . '/ticketing-upgrade-' . bin2hex(random_bytes(6));
+    mkdir($upgradeDirectory);
+    $db->exec('CREATE SCHEMA ' . $upgradeSchema);
+    try {
+        $db->exec('SET search_path TO ' . $upgradeSchema . ',public');
+        foreach (['001_foundation.sql','002_identity.sql'] as $file) {
+            copy($root . '/database/' . $file, $upgradeDirectory . '/' . $file);
+        }
+        (new Migrator($db, $upgradeDirectory))->run();
+        sql("INSERT INTO app_users(id,external_subject,display_name) VALUES (?,'legacy:test','Legacy Test Staff')", [id(9001)]);
+        sql("INSERT INTO departments(id,code,name) VALUES (?,'LEGACY','Legacy Test Department')", [id(9002)]);
+        sql("INSERT INTO categories(id,department_id,code,name) VALUES (?,?,'LEGACY','Legacy Test Category')", [id(9003),id(9002)]);
+        sql("INSERT INTO workflow_templates(id,code,name,owner_department_id) VALUES (?,'LEGACY','Legacy Test Workflow',?)", [id(9004),id(9002)]);
+        sql("INSERT INTO workflow_versions(id,template_id,version,status,definition,published_at) VALUES (?,?,1,'published','{}',now())", [id(9005),id(9004)]);
+        sql("INSERT INTO tickets(id,requester_id,category_id,workflow_version_id,subject,description) VALUES (?,?,?,?,'Legacy ticket','Preserve this ticket')", [id(9006),id(9001),id(9003),id(9005)]);
+        expect((new Migrator($db, $root . '/database'))->run() === ['003_intake.sql'], 'existing foundation upgrades with only the new migration');
+        $legacy = sql('SELECT subject,requester_snapshot,origin_assignment_id FROM tickets WHERE id=?', [id(9006)])->fetch();
+        expect($legacy['subject'] === 'Legacy ticket' && $legacy['requester_snapshot'] === '{}' && $legacy['origin_assignment_id'] === null, 'upgrade preserves existing ticket without inventing origin history');
+    } finally {
+        $db->exec('SET search_path TO ' . $schema . ',public');
+        $db->exec('DROP SCHEMA ' . $upgradeSchema . ' CASCADE');
+        foreach (glob($upgradeDirectory . '/*.sql') as $file) {
+            unlink($file);
+        }
+        rmdir($upgradeDirectory);
+    }
     $tempDirectory = sys_get_temp_dir() . '/ticketing-migrations-' . bin2hex(random_bytes(6));
     mkdir($tempDirectory);
     copy($root . '/database/001_foundation.sql', $tempDirectory . '/001_foundation.sql');
@@ -66,7 +93,7 @@ try {
         expect(false, 'broken migration must fail');
     } catch (PDOException) {
         expect(sql("SELECT to_regclass('should_rollback')")->fetchColumn() === null, 'DDL rollback on migration failure');
-        expect((int)sql('SELECT count(*) FROM schema_migrations')->fetchColumn() === 2, 'failed migration absent from ledger');
+        expect((int)sql('SELECT count(*) FROM schema_migrations')->fetchColumn() === 3, 'failed migration absent from ledger');
     }
 
     $directory = [
@@ -188,7 +215,7 @@ try {
         expect(callApi('/tickets', $tokens[102], $filter)->status === 422, 'invalid query rejected');
     }
     expect(callApi('/tickets', $tokens[101], [], 'HEAD')->body === '', 'HEAD omits body');
-    expect(callApi('/tickets', $tokens[101], [], 'POST')->status === 405, 'unimplemented mutations fail explicitly');
+    expect(callApi('/tickets', $tokens[101], [], 'POST')->status === 415, 'submission requires JSON content type');
     expect(callApi('/tickets', $tokens[101])->headers['Cache-Control'] === 'private, no-store', 'private records never cached');
     $admin->revoke('grant', $grantLocal, 'Test immediate revocation');
     expect(callApi('/tickets', $tokens[101])->payload['data'] === [], 'grant revocation effective on next request');
@@ -238,6 +265,7 @@ try {
     expect(str_contains(implode('\n', $http_response_header), 'X-Request-ID:'), 'real HTTP correlation header');
     $ready = file_get_contents($base.'/health/ready');
     expect(json_decode($ready, true)['data']['ready'] === true, 'real HTTP database readiness');
+    require __DIR__ . '/intake.php';
     echo "PASS: $checks PostgreSQL integration and HTTP checks.\n";
 } finally {
     if (is_resource($server)) {

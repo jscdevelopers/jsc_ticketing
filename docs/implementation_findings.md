@@ -49,4 +49,6 @@ The working-tree source, rather than HEAD alone, supplied these findings. The or
 
 ## Current exit boundary
 
-This is the initial backend foundation and read-authorization slice of P0/P1, not completion of every P0/P1 item. Angular, production SSO, ticket intake, candidate resolution/claims, workflow execution/publication, attachments, SLA, notifications and production deployment remain open. The blueprint claim example is not registered as an API endpoint. Its 100-contender acceptance test remains unverified.
+The backend foundation now also includes a P2 department-triage intake slice: versioned category configuration, effective posting snapshots, explicit submit/self-read authority, idempotent submission, rate limits and transactional event/outbox. See `docs/intake.md`. The `department-triage-v1` profile is intentionally narrower than the blueprint graph engine; unsupported graphs fail closed.
+
+This does not complete P0/P1 or P2. Angular, production SSO, named administrator workflows, candidate resolution/claims, graph execution/publication, CC/attachments, sensitive intake, SLA, notification delivery and production deployment remain open. The blueprint claim example is not registered as an API endpoint. Its 100-contender acceptance test remains unverified.

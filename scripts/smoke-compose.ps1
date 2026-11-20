@@ -21,6 +21,11 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Container migration failed.' }
     docker @composeArguments --profile tools run --rm migrate
     if ($LASTEXITCODE -ne 0) { throw 'Container migration repeat failed.' }
+    docker @composeArguments exec -T postgres createdb -U ticketing ticketing_test
+    if ($LASTEXITCODE -ne 0) { throw 'Container test database could not be created.' }
+    $testSource = (Resolve-Path "$PSScriptRoot/../backend/tests").Path
+    docker @composeArguments run --rm --no-deps -T --env 'DB_DSN=pgsql:host=postgres;port=5432;dbname=ticketing_test' --volume "${testSource}:/app/tests:ro" api php tests/integration.php
+    if ($LASTEXITCODE -ne 0) { throw 'Linux container integration checks failed.' }
     docker @composeArguments up -d --wait api
     if ($LASTEXITCODE -ne 0) { throw 'Development API did not become healthy.' }
     $binding = docker @composeArguments port api 8080
@@ -29,7 +34,7 @@ try {
     if (!$ready.data.ready) { throw 'Database readiness check failed.' }
     docker @composeArguments exec -T api php -r 'exit(posix_getuid() === 10001 ? 0 : 1);'
     if ($LASTEXITCODE -ne 0) { throw 'Runtime user check failed.' }
-    Write-Output 'PASS: Compose build, migrations, repeat migration, readiness and non-root runtime.'
+    Write-Output 'PASS: Compose build, migrations, Linux integration checks, readiness and non-root runtime.'
 } finally {
     # Only the uniquely named disposable test project and its volume are removed.
     if ($testProject -notmatch '^jsc-ticketing-smoke-[a-f0-9]{12}$') { throw 'Unexpected test project name; refusing cleanup.' }

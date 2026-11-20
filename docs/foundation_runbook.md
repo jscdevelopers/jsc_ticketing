@@ -69,8 +69,8 @@ Read scopes are independent alternatives: own requester, origin station/province
 ## Remaining work
 
 1. Complete P0/P1: approved SSO/session adapter, named-admin organization/grant workflows, effective assignment/candidate policies and least-privilege database roles.
-2. P2: idempotent intake, category validation, origin snapshots, initial routing, transactional event/outbox, private attachments.
-3. P3/P4: production graph validator/runner, immutable publication, separate parallel tasks, atomic claims/releases with 100-contender test. The blueprint Python validator is a limited reference, not production validation; its static actor fixture test does not prove authorization. The PHP example is not exposed.
+2. P2: intake now supports versioned department triage, category validation, origin snapshots, idempotency, rate limits and transactional event/outbox; see [intake operations](intake.md). Private attachments, CC and sensitive intake remain open.
+3. P3/P4: production graph validator/runner, graph publication, separate parallel tasks, atomic claims/releases with 100-contender test. The simple triage configuration has immutable versions; it does not execute arbitrary graphs. The blueprint Python validator remains a limited reference, and the PHP claim example is not exposed.
 4. Angular: runnable workspace based on the observed stack, authenticated pages, dense accessible forms/queues, focusable progress details, responsive layouts and E2E coverage. Current prototype remains demo-only.
 5. P5/P6: scoped dashboards, SLA/calendar, notifications, reports/export, operational audit access, backup/restore and staging security/performance tests.
 
