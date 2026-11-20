@@ -1,4 +1,5 @@
 <?php
+declare(strict_types=1);
 namespace App\Http;
 
 /** JSON and multipart request representation used by the creditors routes. */
@@ -41,7 +42,7 @@ final class Request
     {
         $headers = function_exists('getallheaders') ? getallheaders() : [];
         $contentType = strtolower((string)($headers['Content-Type'] ?? $headers['content-type'] ?? ''));
-        $rawBody = file_get_contents('php://input') ?: '';
+        $rawBody = file_get_contents('php://input', false, null, 0, 65537) ?: '';
         $body = [];
         $parseError = null;
         if (str_contains($contentType, 'application/json')) {
@@ -65,6 +66,9 @@ final class Request
         );
         if ($parseError !== null) {
             $request->attributes['body_parse_error'] = $parseError;
+        }
+        if (strlen($rawBody) > 65536) {
+            $request->attributes['body_parse_error'] = 'Request body exceeds 64 KiB.';
         }
         return $request;
     }

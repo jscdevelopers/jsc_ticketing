@@ -1,0 +1,48 @@
+name: jsc-ticketing-dev
+services:
+  postgres:
+    image: postgres:16.15-alpine
+    environment:
+      POSTGRES_DB: ticketing
+      POSTGRES_USER: ticketing
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set a dedicated development database password}
+    volumes:
+      - ticketing_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -h 127.0.0.1 -U ticketing -d ticketing"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+  api:
+    build: ../backend
+    environment: &database_environment
+      DB_DSN: pgsql:host=postgres;port=5432;dbname=ticketing
+      DB_USER: ticketing
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?Set a dedicated development database password}
+    ports:
+      - "127.0.0.1:${TICKETING_API_PORT:-8186}:8080"
+    depends_on:
+      postgres: {condition: service_healthy}
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      test: [CMD, php, -r, "exit(@file_get_contents('http://127.0.0.1:8080/api/v1/health/ready') === false ? 1 : 0);"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+  migrate:
+    build: ../backend
+    command: [php, bin/console.php, migrate]
+    environment: *database_environment
+    depends_on:
+      postgres: {condition: service_healthy}
+    profiles: [tools]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+volumes:
+  ticketing_data: {}

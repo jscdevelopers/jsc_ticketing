@@ -64,6 +64,17 @@ final class Provisioner
                 AND NOT EXISTS (SELECT 1 FROM user_roles WHERE user_id=CAST(? AS uuid)
                   AND role_id=roles.id AND valid_from<=statement_timestamp() AND (valid_to IS NULL OR valid_to>statement_timestamp()))");
             $query->execute([$userId, $userId]);
+            if ($query->rowCount() > 0) {
+                $this->audit('READER_ROLE_ASSIGNED', $userId, $reason);
+            }
+            $query = $this->db->prepare("SELECT id FROM scope_grants WHERE user_id=?
+                AND permission_code='ticket.read' AND scope_kind=? AND scope_ref_id IS NOT DISTINCT FROM CAST(? AS uuid)
+                AND revoked_at IS NULL AND valid_from<=statement_timestamp()
+                AND (valid_to IS NULL OR valid_to>statement_timestamp()) ORDER BY valid_from,id LIMIT 1");
+            $query->execute([$userId, $kind, $ref]);
+            if ($existing = $query->fetchColumn()) {
+                return $existing;
+            }
             $query = $this->db->prepare("INSERT INTO scope_grants(user_id,permission_code,scope_kind,scope_ref_id,grant_reason)
                 VALUES (?,'ticket.read',?,?,?) RETURNING id");
             $query->execute([$userId, $kind, $ref, $reason]);
@@ -137,8 +148,12 @@ final class Provisioner
                     }
                     $updates = array_map(static fn ($column) => "$column=EXCLUDED.$column", array_slice($columns, 1));
                     $statement = $this->db->prepare('INSERT INTO ' . $table . '(' . implode(',', $columns) . ') VALUES ('
-                        . implode(',', array_fill(0, count($columns), '?')) . ') ON CONFLICT(id) DO UPDATE SET ' . implode(',', $updates));
+                        . implode(',', array_fill(0, count($columns), '?')) . ') ON CONFLICT(id) DO UPDATE SET ' . implode(',', $updates)
+                        . ($table === 'app_users' ? ' WHERE app_users.external_subject=EXCLUDED.external_subject' : ''));
                     $statement->execute($values);
+                    if ($table === 'app_users' && $statement->rowCount() !== 1) {
+                        throw new InvalidArgumentException('An existing user UUID cannot be rebound to another external identity.');
+                    }
                 }
                 $counts[$table] = count($rows);
             }

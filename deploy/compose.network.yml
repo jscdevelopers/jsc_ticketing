@@ -1,0 +1,7 @@
+# Optional override for hosts whose default Docker address pools are exhausted.
+# Choose an unused subnet; Docker rejects overlaps without changing other networks.
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: ${TICKETING_NETWORK_SUBNET:?Set an unused local Docker subnet}

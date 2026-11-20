@@ -40,9 +40,13 @@ final class TicketReader
             $params['search_subject'] = $params['search_reference'] = '%' . str_replace(['!','%','_'], ['!!','!%','!_'], $query['q']) . '%';
         }
         if (isset($query['cursor'])) {
-            $cursor = base64_decode($query['cursor'], true);
+            $cursor = strlen($query['cursor']) <= 128 ? base64_decode($query['cursor'], true) : false;
             $parts = $cursor === false ? [] : explode('|', $cursor);
             if (count($parts) !== 2 || !preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d{1,6})?\+00$/D', $parts[0]) || !self::uuid($parts[1])) {
+                throw new ApiException(422, 'invalid_cursor', 'Cursor is invalid.');
+            }
+            $parsed = date_parse($parts[0]);
+            if ($parsed['error_count'] || $parsed['warning_count']) {
                 throw new ApiException(422, 'invalid_cursor', 'Cursor is invalid.');
             }
             $where[] = '(t.created_at,t.id)<(CAST(:created AS timestamptz),CAST(:cursor_id AS uuid))';

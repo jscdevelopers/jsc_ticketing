@@ -108,7 +108,18 @@ try {
         expect(sql('SELECT name FROM provinces WHERE id=?', [id(1)])->fetchColumn() === 'Test Province One', 'directory import rolls back all prior updates');
     }
     expect((int)sql('SELECT count(*) FROM security_events')->fetchColumn() === 2, 'only committed imports audited');
+    $rebound = ['app_users' => [$directory['app_users'][0]]];
+    $rebound['app_users'][0]['external_subject'] = 'different:identity';
+    try {
+        $admin->importDirectory($rebound, false);
+        expect(false, 'existing identity cannot be replaced through import');
+    } catch (InvalidArgumentException) {
+        expect(sql('SELECT external_subject FROM app_users WHERE id=?', [id(101)])->fetchColumn() === 'test:101', 'directory import preserves identity binding');
+    }
     $grantLocal = $admin->grantRead(id(101), 'station', id(11), 'Test local scope');
+    $grantEvents = (int)sql('SELECT count(*) FROM security_events')->fetchColumn();
+    expect($admin->grantRead(id(101), 'station', id(11), 'Test retry') === $grantLocal, 'repeated active grant reuses existing record');
+    expect((int)sql('SELECT count(*) FROM security_events')->fetchColumn() === $grantEvents, 'repeated grant adds no audit duplicate');
     $grantNational = $admin->grantRead(id(102), 'national', null, 'Test explicit oversight');
     $admin->grantRead(id(103), 'station', id(11), 'Test one station');
     $grantDepartment = $admin->grantRead(id(103), 'department', id(22), 'Test second independent scope');
@@ -122,6 +133,16 @@ try {
         $tokens[$i] = $admin->issueToken(id($i), 1);
     }
     expect(sql('SELECT token_hash FROM api_tokens WHERE user_id=?', [id(101)])->fetchColumn() === hash('sha256', $tokens[101]), 'only token hash stored');
+    $tokenCount = (int)sql('SELECT count(*) FROM api_tokens')->fetchColumn();
+    sql("CREATE FUNCTION reject_test_audit() RETURNS trigger LANGUAGE plpgsql AS \$\$ BEGIN RAISE EXCEPTION 'Simulated audit failure'; END \$\$");
+    sql('CREATE TRIGGER reject_test_audit BEFORE INSERT ON security_events FOR EACH ROW EXECUTE FUNCTION reject_test_audit()');
+    try {
+        $admin->issueToken(id(101), 1);
+        expect(false, 'audit failure must abort token issuance');
+    } catch (PDOException) {
+        expect((int)sql('SELECT count(*) FROM api_tokens')->fetchColumn() === $tokenCount, 'audit failure rolls back credential issuance');
+    }
+    sql('DROP TRIGGER reject_test_audit ON security_events');
     expect(callApi('/me')->status === 401, 'anonymous profile rejected');
     expect(callApi('/me', str_repeat('a',64))->status === 401, 'unknown bearer rejected');
     expect(callApi('/me', $tokens[101])->payload['data']['id'] === id(101), 'bearer resolves trusted identity');
@@ -148,6 +169,14 @@ try {
     expect(count(callApi('/tickets', $tokens[103])->payload['data']) === 2, 'independent station and department scopes produce correct union');
     expect(callApi('/tickets/'.id(303), $tokens[103])->status === 404, 'multiple scopes do not broaden to unrelated department and station');
     expect(count(callApi('/tickets', $tokens[104])->payload['data']) === 1, 'self scope uses immutable requester identity');
+    sql('UPDATE staff_assignments SET station_id=? WHERE user_id=?', [id(12),id(101)]);
+    expect(count(callApi('/tickets', $tokens[101])->payload['data']) === 1, 'changing current posting does not broaden historical ticket scope');
+    sql("INSERT INTO scope_grants(user_id,permission_code,scope_kind,grant_reason) VALUES (?,'ticket.read','national','Test grant without role')", [id(106)]);
+    expect(callApi('/tickets', $tokens[106])->payload['data'] === [], 'grant without role permission cannot authorize reads');
+    $provinceGrant = $admin->grantRead(id(106), 'province', id(2), 'Test province scope');
+    sql("UPDATE scope_grants SET revoked_at=now() WHERE user_id=? AND scope_kind='national'", [id(106)]);
+    expect(callApi('/tickets/'.id(302), $tokens[106])->status === 200, 'province scope permits matching origin province');
+    expect(callApi('/tickets/'.id(301), $tokens[106])->status === 404, 'province scope rejects another province');
     expect(callApi('/tickets/'.id(314), $tokens[102])->status === 404, 'national read does not imply sensitive clearance');
     sql("INSERT INTO role_permissions(role_id,permission_code) SELECT id,'ticket.read_sensitive' FROM roles WHERE code='ticket_reader'");
     sql("INSERT INTO scope_grants(user_id,permission_code,scope_kind,grant_reason) VALUES (?,'ticket.read_sensitive','national','Test separate sensitive clearance')", [id(102)]);
@@ -155,7 +184,7 @@ try {
     expect(callApi('/tickets', $tokens[102], ['q'=>'Ticket 13'])->payload['data'][0]['id'] === id(313), 'server search filters authorized rows');
     expect(callApi('/tickets', $tokens[102], ['q'=>'%'])->payload['data'] === [], 'search wildcards treated literally');
     expect(callApi('/tickets', $tokens[101], ['q'=>'Ticket 13'])->payload['data'] === [], 'search never bypasses scope');
-    foreach ([['limit'=>'11'],['cursor'=>'bad'],['status'=>'invalid'],['q'=>['nested']],['actor'=>id(102)]] as $filter) {
+    foreach ([['limit'=>'11'],['cursor'=>'bad'],['cursor'=>base64_encode('2026-99-99 99:99:99+00|'.id(301))],['status'=>'invalid'],['q'=>['nested']],['actor'=>id(102)]] as $filter) {
         expect(callApi('/tickets', $tokens[102], $filter)->status === 422, 'invalid query rejected');
     }
     expect(callApi('/tickets', $tokens[101], [], 'HEAD')->body === '', 'HEAD omits body');

@@ -1,4 +1,5 @@
 <?php
+declare(strict_types=1);
 namespace App\Http;
 
 use Closure;
@@ -164,9 +165,6 @@ final class Router
         if (in_array('GET', $methods, true)) {
             $methods[] = 'HEAD';
         }
-        if (in_array('PUT', $methods, true)) {
-            $methods[] = 'PATCH';
-        }
         if ($routes !== []) {
             $methods[] = 'OPTIONS';
         }
@@ -181,7 +179,6 @@ final class Router
     {
         return match (strtoupper($method)) {
             'HEAD' => ['GET'],
-            'PATCH' => ['PATCH', 'PUT'],
             default => [strtoupper($method)],
         };
     }

@@ -34,7 +34,7 @@ final class Application
                 (new TicketReader($this->db()))->detail($r->user['id'], $r->params['id'])
             ))->middleware($secure);
             if (isset($request->attributes['body_parse_error'])) {
-                throw new ApiException(422, 'invalid_json', 'Malformed JSON request body.');
+                throw new ApiException(422, 'invalid_json', (string)$request->attributes['body_parse_error']);
             }
             $response = $router->dispatch($request);
         } catch (ApiException $error) {

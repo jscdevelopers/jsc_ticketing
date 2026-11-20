@@ -25,7 +25,7 @@ final class Migrator
                 if ($sql === false) {
                     throw new RuntimeException('Migration cannot be read.');
                 }
-                $checksum = hash('sha256', $sql);
+                $checksum = hash('sha256', str_replace("\r\n", "\n", $sql));
                 $query = $this->db->prepare('SELECT checksum FROM schema_migrations WHERE name = ?');
                 $query->execute([$name]);
                 $prior = $query->fetchColumn();

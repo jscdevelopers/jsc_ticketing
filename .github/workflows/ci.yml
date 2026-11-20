@@ -1,0 +1,40 @@
+name: Foundation checks
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16.15-alpine
+        env:
+          POSTGRES_DB: ticketing_test
+          POSTGRES_USER: ticketing_test
+          POSTGRES_PASSWORD: ci-isolated-database
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U ticketing_test -d ticketing_test"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      DB_DSN: pgsql:host=127.0.0.1;port=5432;dbname=ticketing_test
+      DB_USER: ticketing_test
+      DB_PASSWORD: ci-isolated-database
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: pdo_pgsql
+          coverage: none
+      - run: composer install --no-interaction --prefer-dist
+        working-directory: backend
+      - run: composer validate --strict
+        working-directory: backend
+      - run: find backend -name '*.php' -not -path '*/vendor/*' -print0 | xargs -0 -n1 php -l
+      - run: php backend/tests/integration.php
+      - run: python -m unittest discover -s JSC_Ticketing_Blueprint/tests -v
+      - run: docker build -t jsc-ticketing-ci backend
+      - run: docker compose -f deploy/compose.yml config --quiet
+        env:
+          POSTGRES_PASSWORD: ci-compose-validation
