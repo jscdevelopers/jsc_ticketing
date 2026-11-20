@@ -8,9 +8,18 @@ Executable backend foundation and ticket intake for the supplied Angular + PHP/N
 - [Foundation runbook and known gaps](docs/foundation_runbook.md).
 - [Executed validation and limitations](docs/validation.md).
 - [Configure and use ticket intake](docs/intake.md).
+- [Offline, development and production environments](docs/environments.md).
 - `JSC_Ticketing_Blueprint/`: preserved requirements, workflow specs and design assets.
 
 ## Run locally
+
+Tracked profiles are available for all three environments. To start development with a private generated database secret and verified readiness:
+
+```powershell
+./scripts/run-environment.ps1 -Environment development -Build
+```
+
+The API runs at `http://127.0.0.1:8186`. Offline uses port 8187 and cached images. Production settings are prepared; an approved production runtime is still required. The original development Compose commands below remain available.
 
 In PowerShell, choose a dedicated development database password without committing it:
 

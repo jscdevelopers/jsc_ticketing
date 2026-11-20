@@ -18,3 +18,7 @@ Intake checks cover an upgrade from migration 002 with an existing ticket, bound
 The first Compose startup hit this workstation's exhausted default Docker address pools. The optional network override was then tested successfully with an unused `10.254.240.0/28` subnet. Existing networks were retained. The successful smoke test removed its own containers, network and database volume afterward; development images remain available in Docker's cache.
 
 The GitHub Actions workflow has been authored but has not been run on GitHub. No Angular build/browser E2E, real SSO, concurrent task claims, backup/restore, staging deployment, live notification delivery or production integration is claimed. See the runbook's remaining-work list.
+
+## Tracked environment profiles
+
+Offline, development and production profiles were validated through Docker Compose. Development was built, migrated, started and verified over localhost, then started again to verify migration no-op and secret reuse. Offline reused cached API/PostgreSQL/Nginx images, applied migrations, and exposed a healthy API through its local gateway while the API/database network had Docker `Internal=true`. The gateway runs without root on a read-only filesystem. Production configuration was validated only; no approved production image, real production credentials or server deployment is claimed. Password files are ignored and excluded from the Git commit.
