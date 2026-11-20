@@ -1,0 +1,12 @@
+.env
+.env.*
+!.env.example
+**/vendor/
+**/node_modules/
+**/__pycache__/
+**/.angular/
+**/dist/
+**/secrets/
+docker-data/
+*.log
+.test-runtime/

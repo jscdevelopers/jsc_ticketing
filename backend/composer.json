@@ -1,0 +1,13 @@
+{
+  "name": "jsc/ticketing",
+  "description": "JSC Ticketing foundation using the inspected local Nite HTTP conventions",
+  "type": "project",
+  "license": "proprietary",
+  "require": {"php": "^8.2", "ext-pdo": "*", "ext-pdo_pgsql": "*"},
+  "autoload": {"psr-4": {"App\\": "src/"}},
+  "scripts": {
+    "serve": "@php -S 127.0.0.1:8186 -t public public/index.php",
+    "test": "@php tests/integration.php",
+    "migrate": "@php bin/console.php migrate"
+  }
+}
