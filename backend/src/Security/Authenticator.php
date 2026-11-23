@@ -10,13 +10,13 @@ final class Authenticator
 {
     public function __construct(private PDO $db) {}
 
-    public function actor(Request $request): array
+    public function actor(Request $request,array $purposes=['access']): array
     {
         $header = $request->header('Authorization') ?? '';
         if (!preg_match('/^Bearer ([a-f0-9]{64})$/iD', $header, $matches)) {
             throw new ApiException(401, 'authentication_required', 'Sign in is required.');
         }
-        $query = $this->db->prepare('SELECT u.id,u.display_name,u.external_subject FROM api_tokens a
+        $query = $this->db->prepare('SELECT u.id,u.display_name,u.external_subject,a.purpose FROM api_tokens a
             JOIN app_users u ON u.id=a.user_id
             WHERE a.token_hash=:hash AND a.revoked_at IS NULL AND a.expires_at>statement_timestamp() AND u.active');
         $query->execute(['hash' => hash('sha256', $matches[1])]);
@@ -24,6 +24,7 @@ final class Authenticator
         if (!$actor) {
             throw new ApiException(401, 'authentication_required', 'Sign in is required.');
         }
+        if(!in_array($actor['purpose'],$purposes,true)){throw new ApiException(403,'password_change_required','Change your temporary password before using the application.');}
         return $actor;
     }
 }

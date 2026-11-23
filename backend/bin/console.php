@@ -13,6 +13,7 @@ if ($command === 'help') {
     echo "  migrate\n  directory:import FILE.json [--dry-run]\n  token:issue USER_UUID HOURS(1..24)\n";
     echo "  scope:grant-read USER_UUID KIND REF_UUID_OR_DASH REASON\n  revoke token|grant UUID REASON\n";
     echo "  scope:grant-submit USER_UUID REASON\n  catalog:configure FILE.json REASON\n";
+    echo "  auth:set-password USER_UUID USERNAME REASON (password on stdin)\n  admin:grant USER_UUID REASON\n  worker:once\n";
     exit(0);
 }
 try {
@@ -33,6 +34,9 @@ try {
         'token:issue' => ['token' => $provisioner->issueToken($argv[2] ?? '', (int)($argv[3] ?? 0)), 'notice' => 'Store securely; displayed once.'],
         'scope:grant-read' => ['grant_id' => $provisioner->grantRead($argv[2] ?? '', $argv[3] ?? '', ($argv[4] ?? '-') === '-' ? null : $argv[4], $argv[5] ?? '')],
         'scope:grant-submit' => $provisioner->grantSubmit($argv[2] ?? '', $argv[3] ?? ''),
+        'admin:grant' => $provisioner->grantOperations($argv[2]??'',$argv[3]??''),
+        'auth:set-password' => $provisioner->setPassword($argv[2]??'',$argv[3]??'',rtrim((string)fgets(STDIN),"\r\n"),$argv[4]??''),
+        'worker:once' => (function()use($db):array{$worker=new App\Workflow\Worker($db);return['timers'=>$worker->timers(),'escalations'=>$worker->escalate(),'notifications'=>$worker->outbox(),'attachments'=>(new App\Tickets\Attachments($db))->scanPending()];})(),
         'catalog:configure' => (function () use ($argv, $db): array {
             if (!isset($argv[2]) || !is_file($argv[2]) || filesize($argv[2]) > 65536) {
                 throw new InvalidArgumentException('Intake configuration JSON file required (maximum 64 KiB).');

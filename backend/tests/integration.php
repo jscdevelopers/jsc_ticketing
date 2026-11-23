@@ -46,9 +46,10 @@ function callApi(string $path, ?string $token = null, array $query = [], string 
 }
 try {
     $migrator = new Migrator($db, $root . '/database');
-    expect(count($migrator->run()) === 3, 'fresh migrations apply');
+    $migrationFiles=glob($root.'/database/*.sql');sort($migrationFiles);$migrationNames=array_map('basename',$migrationFiles);$migrationCount=count($migrationFiles);
+    expect(count($migrator->run()) === $migrationCount, 'fresh migrations apply');
     expect($migrator->run() === [], 'repeat migration is a no-op');
-    expect((int)sql('SELECT count(*) FROM schema_migrations')->fetchColumn() === 3, 'migration ledger persisted');
+    expect((int)sql('SELECT count(*) FROM schema_migrations')->fetchColumn() === $migrationCount, 'migration ledger persisted');
     $upgradeSchema = $schema . '_upgrade';
     $upgradeDirectory = sys_get_temp_dir() . '/ticketing-upgrade-' . bin2hex(random_bytes(6));
     mkdir($upgradeDirectory);
@@ -65,7 +66,7 @@ try {
         sql("INSERT INTO workflow_templates(id,code,name,owner_department_id) VALUES (?,'LEGACY','Legacy Test Workflow',?)", [id(9004),id(9002)]);
         sql("INSERT INTO workflow_versions(id,template_id,version,status,definition,published_at) VALUES (?,?,1,'published','{}',now())", [id(9005),id(9004)]);
         sql("INSERT INTO tickets(id,requester_id,category_id,workflow_version_id,subject,description) VALUES (?,?,?,?,'Legacy ticket','Preserve this ticket')", [id(9006),id(9001),id(9003),id(9005)]);
-        expect((new Migrator($db, $root . '/database'))->run() === ['003_intake.sql'], 'existing foundation upgrades with only the new migration');
+        expect((new Migrator($db, $root . '/database'))->run() === array_slice($migrationNames,2), 'existing foundation upgrades with only new migrations');
         $legacy = sql('SELECT subject,requester_snapshot,origin_assignment_id FROM tickets WHERE id=?', [id(9006)])->fetch();
         expect($legacy['subject'] === 'Legacy ticket' && $legacy['requester_snapshot'] === '{}' && $legacy['origin_assignment_id'] === null, 'upgrade preserves existing ticket without inventing origin history');
     } finally {
@@ -93,7 +94,7 @@ try {
         expect(false, 'broken migration must fail');
     } catch (PDOException) {
         expect(sql("SELECT to_regclass('should_rollback')")->fetchColumn() === null, 'DDL rollback on migration failure');
-        expect((int)sql('SELECT count(*) FROM schema_migrations')->fetchColumn() === 3, 'failed migration absent from ledger');
+        expect((int)sql('SELECT count(*) FROM schema_migrations')->fetchColumn() === $migrationCount, 'failed migration absent from ledger');
     }
 
     $directory = [
@@ -266,6 +267,9 @@ try {
     $ready = file_get_contents($base.'/health/ready');
     expect(json_decode($ready, true)['data']['ready'] === true, 'real HTTP database readiness');
     require __DIR__ . '/intake.php';
+    require __DIR__ . '/workflows.php';
+    require __DIR__ . '/security-operations.php';
+    require __DIR__ . '/local-demo.php';
     echo "PASS: $checks PostgreSQL integration and HTTP checks.\n";
 } finally {
     if (is_resource($server)) {

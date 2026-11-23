@@ -1,0 +1,10 @@
+BEGIN;
+ALTER TABLE ticket_attachments ADD COLUMN sha256 text CHECK(sha256 IS NULL OR length(sha256)=64);
+ALTER TABLE ticket_attachments ADD COLUMN scan_provider text;
+ALTER TABLE ticket_attachments ADD COLUMN scan_attempts integer NOT NULL DEFAULT 0;
+ALTER TABLE ticket_attachments ADD COLUMN scan_next_at timestamptz NOT NULL DEFAULT now();
+ALTER TABLE ticket_attachments ADD COLUMN last_scan_error text;
+ALTER TABLE ticket_attachments ADD COLUMN active boolean NOT NULL DEFAULT true;
+ALTER TABLE ticket_attachments ADD COLUMN version integer NOT NULL DEFAULT 1;
+CREATE INDEX idx_attachments_scan ON ticket_attachments(scan_next_at) WHERE scan_state='quarantined' AND active;
+COMMIT;

@@ -39,7 +39,8 @@ final class CatalogConfigurator
             }
             $query = $this->db->prepare('INSERT INTO categories(id,department_id,code,name,form_schema)
                 VALUES (?,?,?,?,CAST(? AS jsonb)) ON CONFLICT(id) DO UPDATE SET
-                department_id=EXCLUDED.department_id,code=EXCLUDED.code,name=EXCLUDED.name,form_schema=EXCLUDED.form_schema');
+                department_id=EXCLUDED.department_id,code=EXCLUDED.code,name=EXCLUDED.name,form_schema=EXCLUDED.form_schema,version=categories.version+1
+                WHERE ROW(categories.department_id,categories.code,categories.name,categories.form_schema) IS DISTINCT FROM ROW(EXCLUDED.department_id,EXCLUDED.code,EXCLUDED.name,EXCLUDED.form_schema)');
             $query->execute([$data['category_id'],$data['department_id'],$data['code'],trim($data['name']),json_encode($definition['form_schema'], JSON_THROW_ON_ERROR)]);
             $query = $this->db->prepare('SELECT id,active_version_id FROM workflow_templates WHERE category_id=? FOR UPDATE');
             $query->execute([$data['category_id']]);

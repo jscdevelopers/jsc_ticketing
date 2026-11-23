@@ -71,7 +71,7 @@ final class Request
         if ($parseError !== null) {
             $request->attributes['body_parse_error'] = $parseError;
         }
-        if (strlen($rawBody) > 65536) {
+        if (str_contains($contentType, 'application/json') && strlen($rawBody) > 65536) {
             $request->attributes['body_parse_error'] = 'Request body exceeds 64 KiB.';
         }
         return $request;

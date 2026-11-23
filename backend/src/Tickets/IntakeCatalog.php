@@ -13,8 +13,8 @@ final class IntakeCatalog
     public function listing(string $actor, array $query, bool $assignments): array
     {
         IntakeAccess::requirePermission($this->db, $actor);
-        if (array_diff(array_keys($query), ['q','after']) || count(array_filter($query, 'is_string')) !== count($query)
-            || strlen($query['q'] ?? '') > 200 || (isset($query['after']) && !TicketReader::uuid($query['after']))) {
+        if (array_diff(array_keys($query), ['q','after','id']) || count(array_filter($query, 'is_string')) !== count($query)
+            || (isset($query['id']) && !TicketReader::uuid($query['id'])) || strlen($query['q'] ?? '') > 200 || (isset($query['after']) && !TicketReader::uuid($query['after']))) {
             throw new ApiException(422, 'invalid_filter', 'Use a search of at most 200 bytes and a valid after UUID.');
         }
         $params = [];
@@ -28,12 +28,13 @@ final class IntakeCatalog
                 FROM categories c JOIN departments d ON d.id=c.department_id
                 JOIN workflow_templates w ON w.category_id=c.id
                 JOIN workflow_versions v ON v.id=w.active_version_id AND v.template_id=w.id AND v.status='published'
-                WHERE c.active AND d.active AND v.definition->>'engine'='department-triage-v1'
+                WHERE c.active AND d.active AND v.definition->>'engine' IN ('department-triage-v1','workflow-v1')
                   AND v.definition->>'department_id'=c.department_id::text
                   AND (SELECT count(*) FROM workflow_templates other WHERE other.category_id=c.id AND other.active_version_id IS NOT NULL)=1";
             $id = 'c.id';
             $search = "c.name || ' ' || c.code";
         }
+        if(isset($query['id'])){$sql.=" AND $id=CAST(:choice_id AS uuid)";$params['choice_id']=$query['id'];}
         if (isset($query['after'])) {
             $sql .= " AND $id>CAST(:after AS uuid)";
             $params['after'] = $query['after'];

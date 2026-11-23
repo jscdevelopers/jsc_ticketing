@@ -66,12 +66,6 @@ Responses use the observed Nite envelope: `status`, numeric HTTP `code`, `messag
 
 Read scopes are independent alternatives: own requester, origin station/province, responsible department, explicit ticket, or national. They do not derive authority from current postings. An expired/future role or expired/future/revoked grant contributes no authority. CC-only and candidate-only visibility have not been enabled. Unauthorized and absent ticket IDs produce identical 404s.
 
-## Remaining work
+## Current operations
 
-1. Complete P0/P1: approved SSO/session adapter, named-admin organization/grant workflows, effective assignment/candidate policies and least-privilege database roles.
-2. P2: intake now supports versioned department triage, category validation, origin snapshots, idempotency, rate limits and transactional event/outbox; see [intake operations](intake.md). Private attachments, CC and sensitive intake remain open.
-3. P3/P4: production graph validator/runner, graph publication, separate parallel tasks, atomic claims/releases with 100-contender test. The simple triage configuration has immutable versions; it does not execute arbitrary graphs. The blueprint Python validator remains a limited reference, and the PHP claim example is not exposed.
-4. Angular: runnable workspace based on the observed stack, authenticated pages, dense accessible forms/queues, focusable progress details, responsive layouts and E2E coverage. Current prototype remains demo-only.
-5. P5/P6: scoped dashboards, SLA/calendar, notifications, reports/export, operational audit access, backup/restore and staging security/performance tests.
-
-No production deployment, hardware test, email delivery or live nAuth integration has been performed. Hosting and per-app Niaxa branding/protection choices remain unconfirmed.
+The foundation has been extended into the runnable Angular/PHP workflow application. Use the [local operator guide](local_operations.md), [environment instructions](environments.md) and [executed validation](validation.md) for current behavior and outstanding acceptance work. Local password sign-in, directory administration, task runtime, contextual candidate reads, private uploads, worker notifications and scoped reports are now implemented; earlier foundation-only descriptions above are historical context.

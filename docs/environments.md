@@ -1,37 +1,30 @@
 # Environment profiles and branch publishing
 
-The repository tracks `.env.offline`, `.env.development` and `.env.production`. They contain environment settings and private secret-file paths. Passwords/tokens remain in ignored `secrets/` files; no actual credential is needed in Git. Existing `.env.example` local edits are preserved separately.
+Tracked `.env.development`, `.env.offline` and `.env.production` contain nonsecret settings and secret-file paths. Private passwords/tokens stay in ignored `secrets/`. Existing owner changes to `.env.example` are preserved separately.
 
-| Profile | Local API port | Data isolation | Runtime |
+| Profile | Browser | API | State |
 | --- | --- | --- | --- |
-| development | 8186 | `jsc-ticketing-development` volume/network | Local development image |
-| offline | 8187 | `jsc-ticketing-offline` volume/network | Cached API and Nginx images; API/database network blocks external routing |
-| production | 8188 | `jsc-ticketing-production` volume/network | Requires a separately approved production image and provisioned secret |
+| development | localhost:8180 | localhost:8186 | Built and verified locally |
+| offline | localhost:8187 | Internal only | Cached images; isolated backend; verified locally |
+| production | localhost:8188 placeholder | localhost:8189 placeholder | Configuration only; approved runtime/integrations required |
 
-All published ports bind to loopback. PostgreSQL has no published port. Networks use distinct explicit subnets to avoid the workstation's exhausted default Docker pools; choose approved unused ranges on other machines. Configuration does not establish a production domain or authorize deployment to a server.
+All published ports bind to loopback. PostgreSQL has no host port. Each environment has separate database and private-file volumes. Distinct explicit subnets avoid exhausted Docker default pools. The runner safely replaces the earlier project's offline gateway/network; unrelated resources are retained.
 
 ```powershell
-# Validate any profile without creating a password, container or volume.
 ./scripts/run-environment.ps1 -Environment development -ValidateOnly
 ./scripts/run-environment.ps1 -Environment offline -ValidateOnly
 ./scripts/run-environment.ps1 -Environment production -ValidateOnly
-
-# Build, migrate, start and verify development. Leaves services running.
 ./scripts/run-environment.ps1 -Environment development -Build
-
-# Cache the fixed HTTP gateway while online, then start without build/pull operations.
-docker pull nginx:1.28-alpine
+./scripts/setup-local-demo.ps1 -Environment development
 ./scripts/run-environment.ps1 -Environment offline
-
-# Stop one environment, retaining its database volume and private secret.
+./scripts/setup-local-demo.ps1 -Environment offline
 ./scripts/run-environment.ps1 -Environment development -Stop
-./scripts/run-environment.ps1 -Environment offline -Stop
 ```
 
-New development/offline secrets are generated locally with a cryptographic RNG, never printed, and never overwritten. Preserve the secret with its database volume; replacing only the file does not rotate PostgreSQL's stored password. Rotation requires an approved database role password change and coordinated application update. Protect and back up private files separately from Git. Compose mounts each password as a secret file into PostgreSQL and PHP; PHP already supports `DB_PASSWORD_FILE`.
+Development builds the API and Angular/Nginx images. Offline startup builds/pulls nothing and requires those images plus PostgreSQL cached beforehand. The API/database/worker use an internal network; the fixed-upstream non-root web gateway exposes the UI/API on localhost through a separate network. It is not a forward proxy. Compose 2.24.4+ is required for the offline port reset.
 
-Offline means the API and database run on an internal Docker network without external routing. A non-root Nginx gateway on a separate network exposes only a fixed HTTP upstream to the API on localhost; it is not a forward proxy. This avoids Docker Desktop's inability to expose published ports directly from internal networks. An uncached machine still needs online image preparation first. No image build or pull runs during offline startup. SSO, message delivery and other live integrations remain unimplemented. Development/offline continue to use console-provisioned bearer tokens. The offline override uses Compose's `!reset` syntax; use Docker Compose 2.24.4 or newer.
+Generated database/demo secrets are never printed, overwritten or committed. Preserve them with the matching database. Replacing a file alone does not rotate the stored database password. Demo setup is explicitly limited to development/offline/test and never creates national ticket-read grants. Password sign-in works locally without a real identity server.
 
-The production profile is configuration preparation, not a production deployment. The current development Dockerfile/server must not be relabeled as a production release. Prepare an approved image with the production HTTP runtime, compatible migration command/health route, TLS/proxy, least-privilege database access, secret provisioning and backup/restore checks before using that profile. The runner rejects production builds from the development Dockerfile and does not generate production credentials.
+Local file checking is an explicitly labelled dummy integration, enabled only in development/offline. ClamAV configuration and real nAuth are production placeholders. The production runner rejects building the development PHP HTTP server as a production image and does not generate production secrets. Production requires reviewed runtime images, TLS, database least privilege, approved integration registration and recovery validation. No production server is deployed in the current local-only scope.
 
-Completed changes are committed and pushed to both `origin/main` and `origin/production` under the owner's standing instruction. Pushes use fast-forward updates and preserve remote work. A production-branch push does not itself verify deployment.
+Verified source is pushed to both origin/main and origin/production under the owner's standing instruction, using fast-forward updates. A production-branch push does not mean a live deployment occurred.

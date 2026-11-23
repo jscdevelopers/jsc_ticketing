@@ -7,6 +7,8 @@ RUN apk add --no-cache libpq \
     && addgroup -g 10001 ticketing \
     && adduser -D -u 10001 -G ticketing ticketing
 WORKDIR /app
+RUN mkdir -p /var/lib/ticketing/private && chown ticketing:ticketing /var/lib/ticketing/private \
+    && printf 'upload_max_filesize=5M\npost_max_size=6M\nexpose_php=Off\n' > /usr/local/etc/php/conf.d/ticketing.ini
 COPY --chown=ticketing:ticketing . /app
 USER ticketing
 EXPOSE 8080

@@ -21,10 +21,16 @@ services:
     pull_policy: never
     environment: &runtime_environment
       APP_ENV: ${APP_ENV:?Select an environment}
+      AUTH_MODE: ${AUTH_MODE:-password}
+      PRIVATE_STORAGE_PATH: /var/lib/ticketing/private
+      MALWARE_SCANNER_MODE: ${MALWARE_SCANNER_MODE:-clamav}
+      ALLOW_DEMO_INTEGRATIONS: ${ALLOW_DEMO_INTEGRATIONS:-false}
+      CLAMAV_HOST: ${CLAMAV_HOST:-scanner}
       DB_DSN: pgsql:host=postgres;port=5432;dbname=ticketing
       DB_USER: ticketing
       DB_PASSWORD_FILE: /run/secrets/ticketing_db_password
     secrets: [ticketing_db_password]
+    volumes: [ticketing_files:/var/lib/ticketing/private]
     ports:
       - "127.0.0.1:${TICKETING_API_PORT:?Select a local API port}:8080"
     depends_on:
@@ -35,6 +41,43 @@ services:
     security_opt: [no-new-privileges:true]
     healthcheck:
       test: [CMD, php, -r, "exit(@file_get_contents('http://127.0.0.1:8080/api/v1/health/ready') === false ? 1 : 0);"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+  worker:
+    image: ${TICKETING_API_IMAGE:?Select an environment image}
+    pull_policy: never
+    command: [php, bin/worker.php]
+    volumes: [ticketing_files:/var/lib/ticketing/private]
+    environment: *runtime_environment
+    secrets: [ticketing_db_password]
+    depends_on:
+      api: {condition: service_healthy}
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      test: [CMD, php, bin/health.php, --worker]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    restart: unless-stopped
+  web:
+    image: ${TICKETING_WEB_IMAGE:?Select a web image}
+    pull_policy: never
+    ports:
+      - "127.0.0.1:${TICKETING_WEB_PORT:?Select a web port}:8080"
+    depends_on:
+      api: {condition: service_healthy}
+    networks: [default, web]
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, 'http://127.0.0.1:8080/api/v1/health/ready']
       interval: 5s
       timeout: 3s
       retries: 12
@@ -56,9 +99,14 @@ secrets:
     file: ${TICKETING_DB_PASSWORD_FILE:?Set the private database secret path}
 volumes:
   ticketing_data: {}
+  ticketing_files: {}
 networks:
   default:
     internal: ${TICKETING_NETWORK_INTERNAL:-false}
     ipam:
       config:
         - subnet: ${TICKETING_NETWORK_SUBNET:?Choose an unused subnet}
+  web:
+    ipam:
+      config:
+        - subnet: ${TICKETING_WEB_SUBNET:?Choose an unused web subnet}

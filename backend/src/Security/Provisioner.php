@@ -12,6 +12,36 @@ final class Provisioner
 {
     public function __construct(private PDO $db) {}
 
+    public function setPassword(string $user,string $username,string $password,string $reason):void
+    {
+        $this->id($user);$this->reason($reason);$username=strtolower(trim($username));PasswordAuth::validatePassword($password);
+        if(!preg_match('/^[a-z0-9][a-z0-9._@-]{2,99}$/D',$username)){throw new InvalidArgumentException('Username must contain 3..100 letters, digits, dots, underscores, @ or hyphens.');}
+        $hash=password_hash($password,PASSWORD_BCRYPT,['cost'=>12]);
+        $this->transaction(function()use($user,$username,$hash,$reason):void{
+            if(!\App\Support\Sql::run($this->db,'SELECT id FROM app_users WHERE id=? AND active FOR UPDATE',[$user])->fetchColumn()){throw new InvalidArgumentException('Active user required.');}
+            \App\Support\Sql::run($this->db,'INSERT INTO user_credentials(user_id,username,password_hash,must_change) VALUES (?,?,?,true)
+                ON CONFLICT(user_id) DO UPDATE SET username=EXCLUDED.username,password_hash=EXCLUDED.password_hash,must_change=true,password_changed_at=now()',[$user,$username,$hash]);
+            \App\Support\Sql::run($this->db,'UPDATE api_tokens SET revoked_at=now() WHERE user_id=? AND revoked_at IS NULL',[$user]);
+            \App\Support\Sql::run($this->db,'UPDATE login_challenges SET consumed_at=now() WHERE user_id=? AND consumed_at IS NULL',[$user]);
+            $this->audit('PASSWORD_PROVISIONED',$user,$reason);
+        });
+    }
+
+    public function grantOperations(string $user,string $reason):void
+    {
+        $this->id($user);$this->reason($reason);
+        $this->transaction(function()use($user,$reason):void{
+            if(!\App\Support\Sql::run($this->db,'SELECT id FROM app_users WHERE id=? AND active FOR UPDATE',[$user])->fetchColumn()){throw new InvalidArgumentException('Active user required.');}
+            \App\Support\Sql::run($this->db,"INSERT INTO user_roles(user_id,role_id) SELECT ?,r.id FROM roles r WHERE r.code='operations_admin'
+                AND NOT EXISTS(SELECT 1 FROM user_roles ur WHERE ur.user_id=CAST(? AS uuid) AND ur.role_id=r.id AND ur.valid_from<=now() AND (ur.valid_to IS NULL OR ur.valid_to>now()))",[$user,$user]);
+            foreach(['directory.manage','security.manage','workflow.design','workflow.publish']as$permission){
+                \App\Support\Sql::run($this->db,"INSERT INTO scope_grants(user_id,permission_code,scope_kind,grant_reason) SELECT CAST(? AS uuid),?,'national',?
+                    WHERE NOT EXISTS(SELECT 1 FROM scope_grants WHERE user_id=CAST(? AS uuid) AND permission_code=? AND scope_kind='national' AND revoked_at IS NULL AND valid_from<=now() AND (valid_to IS NULL OR valid_to>now()))",[$user,$permission,$reason,$user,$permission]);
+            }
+            $this->audit('OPERATIONS_AUTHORITY_GRANTED',$user,$reason);
+        });
+    }
+
     public function issueToken(string $userId, int $hours): string
     {
         $this->id($userId);
@@ -148,6 +178,7 @@ final class Provisioner
         }
         $this->db->beginTransaction();
         try {
+            \App\Support\Sql::run($this->db,"SELECT set_config('app.actor_system','console',true)");
             $counts = [];
             foreach ($fields as $table => $columns) {
                 $rows = $data[$table] ?? [];
@@ -178,11 +209,15 @@ final class Provisioner
                         $values[] = $value;
                     }
                     $updates = array_map(static fn ($column) => "$column=EXCLUDED.$column", array_slice($columns, 1));
+                    $updates[]="version=$table.version+1";
+                    $current=implode(',',array_map(static fn($column)=>"$table.$column",array_slice($columns,1)));
+                    $incoming=implode(',',array_map(static fn($column)=>"EXCLUDED.$column",array_slice($columns,1)));
                     $statement = $this->db->prepare('INSERT INTO ' . $table . '(' . implode(',', $columns) . ') VALUES ('
                         . implode(',', array_fill(0, count($columns), '?')) . ') ON CONFLICT(id) DO UPDATE SET ' . implode(',', $updates)
-                        . ($table === 'app_users' ? ' WHERE app_users.external_subject=EXCLUDED.external_subject' : ''));
+                        . " WHERE ROW($current) IS DISTINCT FROM ROW($incoming)"
+                        . ($table === 'app_users' ? ' AND app_users.external_subject=EXCLUDED.external_subject' : ''));
                     $statement->execute($values);
-                    if ($table === 'app_users' && $statement->rowCount() !== 1) {
+                    if ($table === 'app_users' && $statement->rowCount() !== 1 && \App\Support\Sql::run($this->db,'SELECT external_subject FROM app_users WHERE id=?',[$row['id']])->fetchColumn()!==$row['external_subject']) {
                         throw new InvalidArgumentException('An existing user UUID cannot be rebound to another external identity.');
                     }
                 }
@@ -207,6 +242,7 @@ final class Provisioner
     {
         $this->db->beginTransaction();
         try {
+            \App\Support\Sql::run($this->db,"SELECT set_config('app.actor_system','console',true)");
             $result = $action();
             $this->db->commit();
             return $result;

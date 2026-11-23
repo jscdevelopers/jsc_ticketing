@@ -5,7 +5,7 @@ $savedEnvironment = @{}
 foreach ($key in $testKeys) { $savedEnvironment[$key] = [Environment]::GetEnvironmentVariable($key, 'Process') }
 try {
     $env:POSTGRES_PASSWORD = [guid]::NewGuid().ToString('N') + [guid]::NewGuid().ToString('N')
-    docker run --detach --rm --name $testContainer --env POSTGRES_PASSWORD --env POSTGRES_USER=ticketing_test --env POSTGRES_DB=ticketing_test --publish 127.0.0.1::5432 postgres:16.15-alpine | Out-Null
+    docker run --detach --rm --name $testContainer --env POSTGRES_PASSWORD --env POSTGRES_USER=ticketing_test --env POSTGRES_DB=ticketing_test --publish 127.0.0.1::5432 postgres:16.15-alpine postgres -c max_connections=250 | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'Isolated PostgreSQL container could not start.' }
     $ready = $false
     for ($attempt = 0; $attempt -lt 60; $attempt++) {

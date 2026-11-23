@@ -1,32 +1,4 @@
-# Keep API/database isolated; expose only a fixed local HTTP gateway.
+# Keep API/database isolated; expose only the application web gateway.
 services:
   api:
     ports: !reset []
-  gateway:
-    image: ${TICKETING_GATEWAY_IMAGE:?Cache the offline gateway image online}
-    pull_policy: never
-    user: '101:101'
-    entrypoint: [nginx]
-    command: [-c, /etc/nginx/offline.conf, -g, 'daemon off;']
-    volumes:
-      - ./deploy/offline-nginx.conf:/etc/nginx/offline.conf:ro
-    ports:
-      - "127.0.0.1:${TICKETING_API_PORT}:8080"
-    depends_on:
-      api: {condition: service_healthy}
-    networks: [default, gateway]
-    read_only: true
-    tmpfs: [/tmp]
-    cap_drop: [ALL]
-    security_opt: [no-new-privileges:true]
-    healthcheck:
-      test: [CMD, wget, -q, -O, /dev/null, 'http://127.0.0.1:8080/api/v1/health/ready']
-      interval: 3s
-      timeout: 3s
-      retries: 12
-    restart: unless-stopped
-networks:
-  gateway:
-    ipam:
-      config:
-        - subnet: ${TICKETING_GATEWAY_SUBNET:?Choose an unused gateway subnet}

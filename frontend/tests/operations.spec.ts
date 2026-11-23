@@ -1,0 +1,42 @@
+import { test,expect,Page } from '@playwright/test';
+const password=process.env['E2E_PASSWORD'];
+test.skip(!password,'Run scripts/test-e2e.ps1 to provision an isolated application.');
+async function signIn(page:Page,username:string){await page.goto('/');await page.getByLabel('Username *',{exact:true}).fill(username);await page.getByLabel('Password *',{exact:true}).fill(password!);await page.getByRole('button',{name:'Sign in',exact:true}).click();await expect(page.getByRole('heading',{name:'Overview',exact:true})).toBeVisible();}
+async function nav(page:Page,name:string){const toggle=page.getByRole('button',{name:'Toggle navigation'});if(await toggle.isVisible())await toggle.click();await page.getByRole('navigation',{name:'',exact:false}).first().getByRole('button',{name,exact:true}).click();}
+test('requester draft, intake, discussion and agent completion use the real backend',async({page})=>{
+  const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
+  await signIn(page,'requester.qa');await page.getByRole('button',{name:'New ticket',exact:true}).click();
+  const subject='Browser case '+Date.now();await page.getByLabel('Subject *',{exact:true}).fill(subject);
+  await page.getByRole('button',{name:'Close · keep draft'}).click();await page.getByRole('button',{name:'New ticket',exact:true}).click();await expect(page.getByLabel('Subject *',{exact:true})).toHaveValue(subject);
+  await page.getByLabel('Posting *',{exact:true}).selectOption({label:'QA Station · QA ICT · QA Officer'});
+  await expect(page.getByLabel('Category *',{exact:true})).toBeEnabled();
+  await page.getByLabel('Category *',{exact:true}).selectOption('00000000-0000-4000-8000-000000000014',{timeout:10000});
+  await page.getByLabel('Description *',{exact:true}).fill('A real isolated browser workflow test.');await page.getByLabel('Asset tag *',{exact:true}).fill('QA-42');
+  await page.getByRole('button',{name:'Submit ticket',exact:true}).click();await expect(page.getByRole('heading',{name:subject,exact:true})).toBeVisible();
+  await page.getByLabel('File *',{exact:true}).setInputFiles({name:'context.txt',mimeType:'text/plain',buffer:Buffer.from('Private browser attachment fixture.')});
+  await page.getByRole('button',{name:'Upload file',exact:true}).click();await expect(page.getByText('context.txt',{exact:true})).toBeVisible();
+  await expect(async()=>{await page.getByRole('button',{name:'Refresh files',exact:true}).click();await expect(page.getByText('Local demo check only; not antivirus.',{exact:true})).toBeVisible({timeout:500});}).toPass({timeout:15000});
+  const downloadPromise=page.waitForEvent('download');await page.getByRole('button',{name:'Download',exact:true}).click();const download=await downloadPromise;expect(download.suggestedFilename()).toBe('context.txt');
+  await page.getByLabel('Comment *',{exact:true}).fill('Requester supplied additional context.');await page.getByRole('button',{name:'Add comment',exact:true}).click();await expect(page.getByText('Requester supplied additional context.',{exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Sign out',exact:true}).click();await signIn(page,'agent.qa');await nav(page,'My actions');
+  await page.getByRole('textbox',{name:'Search My actions',exact:true}).fill(subject);await expect(page.getByRole('button',{name:'Claim',exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Claim',exact:true}).click();await page.getByRole('button',{name:'Claim',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Continue',exact:true})).toBeVisible();await page.getByRole('button',{name:'Continue',exact:true}).click();
+  await page.getByRole('button',{name:'Complete',exact:true}).click();await page.getByLabel('Reason *',{exact:true}).fill('Issue resolved and independently recorded.');await page.getByRole('button',{name:'Complete',exact:true}).click();
+  await expect(page.locator('.panel-heading .status').first()).toHaveText('Closed');
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBeTruthy();expect(errors).toEqual([]);
+});
+test('administrator maintains hierarchy and publishes a guided workflow',async({page},info)=>{
+  await signIn(page,'admin.qa');await nav(page,'Administration');await page.getByRole('button',{name:'Create record',exact:true}).click();
+  await page.getByLabel('Code *',{exact:true}).fill('UI_'+info.project.name.toUpperCase());await page.getByLabel('Name *',{exact:true}).fill('UI Province '+info.project.name);await page.getByLabel('Change reason *',{exact:true}).fill('Approved isolated UI hierarchy test');
+  await page.getByRole('button',{name:'Save record',exact:true}).click();await expect(page.getByText('UI Province '+info.project.name,{exact:true})).toBeVisible();
+  const login=await page.request.post('/api/v1/auth/login',{data:{username:'admin.qa',password}});const token=(await login.json()).data.token;
+  const name='UI workflow '+info.project.name;
+  const category=await page.request.post('/api/v1/admin/categories',{headers:{Authorization:'Bearer '+token,'Idempotency-Key':crypto.randomUUID()},data:{department_id:'00000000-0000-4000-8000-000000000003',code:'UI_'+info.project.name.toUpperCase(),name,parent_id:null,active:true,reason:'Isolated workflow category'}});expect(category.status()).toBe(201);
+  await nav(page,'Workflows');await page.getByRole('button',{name:'New workflow',exact:true}).click();await page.getByLabel('Category *',{exact:true}).selectOption({label:name});await page.getByLabel('Workflow title *',{exact:true}).fill(name);
+  await page.getByRole('button',{name:'Stages',exact:true}).click();const task=page.locator('.node-card').nth(1);await task.getByLabel('Department *',{exact:true}).selectOption({label:'QA ICT'});await task.getByLabel('Eligible position *',{exact:true}).selectOption({label:'QA Officer'});
+  await page.getByRole('button',{name:'Policies',exact:true}).click();await page.getByLabel('Require a different authorized publisher',{exact:true}).uncheck();
+  await page.getByRole('button',{name:'Simulation',exact:true}).click();await page.getByRole('button',{name:'Save and simulate',exact:true}).click();await expect(page.locator('.simulation')).toBeVisible();
+  await page.getByRole('button',{name:'Review',exact:true}).click();await page.getByRole('button',{name:'Approve and publish',exact:true}).click();await page.getByLabel('Approval reason *',{exact:true}).fill('Approved isolated browser workflow');await page.getByRole('button',{name:'Publish',exact:true}).click();
+  await expect(page.locator('dialog[open]')).toHaveCount(0);await expect(page.getByRole('cell',{name:'Published',exact:true}).first()).toBeVisible();
+});

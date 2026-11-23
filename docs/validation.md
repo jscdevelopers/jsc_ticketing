@@ -1,24 +1,23 @@
-# Foundation and intake validation — 20 November 2026
+# Executed local validation - 23 November 2026
 
-Executed locally on the supplied Windows workstation:
-
-| Check | Result |
+| Check | Verified result |
 | --- | --- |
-| PHP syntax across executable backend files | Passed |
-| `composer validate --strict --working-dir=backend` | Passed |
-| `./scripts/test-backend.ps1` | 155 PostgreSQL integration and real HTTP checks passed on Windows PHP |
-| `python -m unittest discover -s JSC_Ticketing_Blueprint/tests -v` | 12 existing blueprint reference tests passed |
-| `./scripts/smoke-compose.ps1` | Image build, first/repeated migrations, 155 integration checks on Linux PHP, HTTP readiness and UID 10001 passed |
-| `git diff --cached --check` | Passed before commit |
+| Backend integration and real HTTP suite | 433 checks passed on Windows PHP and Linux container PHP |
+| Concurrent claim race | 100 independent sessions: one winner, 99 conflicts, one claim event |
+| Desktop/mobile Chrome E2E | Six checks passed: intake/draft, comments, private file check/download, claim/completion, administration/workflow publication, keyboard sign-in and no horizontal overflow |
+| Angular production build | Passed, approximately 520 kB initial bundle |
+| npm audit | Zero reported vulnerabilities |
+| PHP syntax and Composer strict validation | Passed |
+| Linux Compose smoke | Build, fresh/repeated migrations, 433 checks, readiness and UID 10001 passed |
+| Blueprint reference tests | 12 passed |
+| Development Compose | Migrated and healthy on localhost:8180, API :8186; worker/private storage enabled |
+| Offline Compose | Migrated and healthy on localhost:8187 using cached images; backend isolated |
+| Demo provisioning | Local fictional staff/workflow created; repeated run and production rejection tested |
 
-The integration suite verifies fresh/no-op/failed/checksum-mismatched migrations, directory dry-run/reimport/transaction rollback, immutable identity binding, hashed/expired/revoked credentials, audit-failure rollback, grant idempotency/revocation, role validity, independent scope unions, Secretariat vs explicit national access, province and self scopes, historical origin access, separate sensitive clearance, authorization before pagination/search, malformed queries/cursors, immutable history and the real PHP HTTP entrypoint.
+The backend suite covers fresh/repeated/checksum-guarded migrations and upgrade with retained records; posting/role/scope expiry and revocation; Secretariat versus national access; sensitive clearance; immutable versions/history; idempotent intake; transactional rollback after injected event/outbox failures; bounded graph/condition validation; parallel joins and independence; task ownership and conflicts; business calendar/DST/holiday handling; requester reply/timer advancement; one-time escalation and notifications; credential change/MFA boundary/throttling; organization audit and optimistic updates; reassignment/candidate refresh/SLA pause; withdrawal/reopen runs; approval rejection; attachment quarantine, sensitive metadata, rejected downloads, integrity failure and production refusal of demo scanning.
 
-Intake checks cover an upgrade from migration 002 with an existing ticket, bounded form schema validation, submit/self-read permissions, expired/future/foreign posting rejection, immutable origin snapshots, independent A/B department routing, version publication/replay, internal timeline pagination and restricted-event filtering, JSON/body/numeric overflow boundaries, hourly rate limiting and full rollback after simulated outbox failure. Six independent PostgreSQL connections wait behind a shared race barrier and retry one actor/key: one new ticket, one submission event and one outbox job result. The deliberately injected outbox exception emits an expected sanitized `request_failed` log; the suite then verifies rollback and retry.
+MFA tests inject a strict dummy provider at the adapter boundary. Local attachment E2E uses the explicitly labelled dummy check, not real antivirus. The expected sanitized request_failed log during the injected outbox exception is part of rollback verification.
 
-The first Compose startup hit this workstation's exhausted default Docker address pools. The optional network override was then tested successfully with an unused `10.254.240.0/28` subnet. Existing networks were retained. The successful smoke test removed its own containers, network and database volume afterward; development images remain available in Docker's cache.
+Browser tests create a dedicated disposable PostgreSQL/API/worker/storage/web stack and separate desktop/mobile sessions. Test credentials and traces remain ignored. They do not change existing development/offline accounts or passwords. During testing, CSP-blocked critical CSS, changing custom-field identities and decorative icon accessibility names were corrected and rerun successfully.
 
-The GitHub Actions workflow has been authored but has not been run on GitHub. No Angular build/browser E2E, real SSO, concurrent task claims, backup/restore, staging deployment, live notification delivery or production integration is claimed. See the runbook's remaining-work list.
-
-## Tracked environment profiles
-
-Offline, development and production profiles were validated through Docker Compose. Development was built, migrated, started and verified over localhost, then started again to verify migration no-op and secret reuse. Offline reused cached API/PostgreSQL/Nginx images, applied migrations, and exposed a healthy API through its local gateway while the API/database network had Docker `Internal=true`. The gateway runs without root on a read-only filesystem. Production configuration was validated only; no approved production image, real production credentials or server deployment is claimed. Password files are ignored and excluded from the Git commit.
+Linux image smoke checks, all tracked environment configuration, and final runtime checks are recorded with each delivered commit. GitHub CI has been authored but has not been verified running on GitHub. No public deployment, live nAuth/SMTP/ClamAV, hardware test, full accessibility audit, target-scale load result or complete blueprint sign-off is claimed. See [remaining local acceptance work](local_operations.md#recovery-and-remaining-acceptance-work).

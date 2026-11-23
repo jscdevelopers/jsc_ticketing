@@ -1,0 +1,14 @@
+BEGIN;
+ALTER TABLE provinces ADD COLUMN version integer NOT NULL DEFAULT 1;
+ALTER TABLE stations ADD COLUMN version integer NOT NULL DEFAULT 1;
+ALTER TABLE departments ADD COLUMN version integer NOT NULL DEFAULT 1;
+ALTER TABLE positions ADD COLUMN version integer NOT NULL DEFAULT 1;
+ALTER TABLE app_users ADD COLUMN version integer NOT NULL DEFAULT 1;
+ALTER TABLE staff_assignments ADD COLUMN version integer NOT NULL DEFAULT 1;
+ALTER TABLE categories ADD COLUMN version integer NOT NULL DEFAULT 1;
+ALTER TABLE user_roles ADD COLUMN id uuid NOT NULL DEFAULT gen_random_uuid() UNIQUE;
+ALTER TABLE user_roles ADD COLUMN version integer NOT NULL DEFAULT 1;
+ALTER TABLE scope_grants ADD COLUMN version integer NOT NULL DEFAULT 1;
+INSERT INTO roles(code,title) VALUES ('sensitive_reader','Explicit sensitive record clearance');
+INSERT INTO role_permissions(role_id,permission_code) SELECT r.id,p.code FROM roles r CROSS JOIN permissions p WHERE r.code='sensitive_reader' AND p.code IN ('ticket.read','ticket.read_sensitive');
+COMMIT;

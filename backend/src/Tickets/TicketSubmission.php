@@ -61,11 +61,12 @@ final class TicketSubmission
                 throw new ApiException(422, 'category_unavailable', 'Select an active category with a published intake configuration.');
             }
             $definition = json_decode($routes[0]['definition'], true, 32, JSON_THROW_ON_ERROR);
-            if (count($routes) !== 1 || ($definition['engine'] ?? '') !== 'department-triage-v1'
+            if (count($routes) !== 1 || !in_array($definition['engine'] ?? '', ['department-triage-v1','workflow-v1'],true)
                 || ($definition['department_id'] ?? '') !== $routes[0]['department_id'] || !is_array($definition['form_schema'] ?? null)) {
                 throw new ApiException(503, 'intake_configuration_invalid', 'This category requires administrator attention before submission.');
             }
             try {
+                if(($definition['engine']??'')==='workflow-v1'){new \App\Workflow\Graph($definition);}
                 IntakeSchema::validateFields($definition['form_schema'], $body['fields']);
             } catch (\InvalidArgumentException) {
                 throw new ApiException(503, 'intake_configuration_invalid', 'This category requires administrator attention before submission.');
@@ -88,10 +89,15 @@ final class TicketSubmission
             $query = $this->db->prepare("INSERT INTO ticket_events(ticket_id,event_type,actor_user_id,to_state,workflow_version_id,request_id,event_data)
                 VALUES (?,'TICKET_SUBMITTED',?,'submitted',?,?,CAST(? AS jsonb)) RETURNING id");
             $query->execute([$ticket['id'],$actor,$ticket['workflow_version_id'],$requestId,
-                json_encode(['responsible_department_id'=>$ticket['responsible_department_id'],'origin_assignment_id'=>$assignment['id'],'engine'=>'department-triage-v1'], JSON_THROW_ON_ERROR)]);
+                json_encode(['responsible_department_id'=>$ticket['responsible_department_id'],'origin_assignment_id'=>$assignment['id'],'engine'=>$definition['engine']], JSON_THROW_ON_ERROR)]);
             $eventId = $query->fetchColumn();
             $query = $this->db->prepare("INSERT INTO notification_outbox(event_id,kind,dedupe_key,payload) VALUES (?,'ticket_submitted',?,CAST(? AS jsonb))");
             $query->execute([$eventId,'ticket-submitted-'.$ticket['id'],json_encode(['ticket_id'=>$ticket['id'],'event_id'=>$eventId,'recipient_user_id'=>$actor], JSON_THROW_ON_ERROR)]);
+            if(($definition['engine']??'')==='workflow-v1') {
+                (new \App\Workflow\Runtime($this->db,$ticket['id'],$actor,$requestId))->start();
+                $ticket=\App\Support\Sql::run($this->db,'SELECT id,reference,status,version,responsible_department_id,workflow_version_id FROM tickets WHERE id=?',[$ticket['id']])->fetch();
+                $ticket['version']=(int)$ticket['version'];
+            }
             $query = $this->db->prepare('UPDATE idempotency_requests SET response=CAST(? AS jsonb) WHERE id=?');
             $query->execute([json_encode($ticket, JSON_THROW_ON_ERROR),$reservation]);
             $this->db->commit();

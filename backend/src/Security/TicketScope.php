@@ -12,7 +12,7 @@ final class TicketScope
               JOIN role_permissions rp ON rp.role_id=ur.role_id
               WHERE ur.user_id=actor.id AND rp.permission_code='ticket.read'
                 AND ur.valid_from<=statement_timestamp() AND (ur.valid_to IS NULL OR ur.valid_to>statement_timestamp()))
-            AND " . self::grant('ticket.read') . "
+            AND (" . self::grant('ticket.read') . ' OR ' . TaskAccess::candidateSql() . ")
             AND (t.confidentiality='internal' OR (
               EXISTS (SELECT 1 FROM user_roles sur JOIN role_permissions srp ON srp.role_id=sur.role_id
                 WHERE sur.user_id=actor.id AND srp.permission_code='ticket.read_sensitive'

@@ -37,13 +37,13 @@ if ($Environment -eq 'development' -and ($Build -or $imageMissing)) {
 } elseif ($imageMissing) {
     throw "Required image $imageName is not cached. Prepare it before starting $Environment."
 }
-if ($Environment -eq 'offline') {
-    $gatewayImage = $configuration.services.gateway.image
-    $gatewayImageId = docker image ls --quiet $gatewayImage
-    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace(($gatewayImageId -join ''))) {
-        throw "Cache the gateway online before offline use: docker pull $gatewayImage"
-    }
-}
+$webImage = $configuration.services.web.image
+$webImageId = docker image ls --quiet $webImage
+if ($LASTEXITCODE -ne 0) { throw 'Docker image inventory failed.' }
+if ($Environment -eq 'development' -and ($Build -or [string]::IsNullOrWhiteSpace(($webImageId -join '')))) {
+    docker build -t $webImage (Join-Path $workspacePath 'frontend')
+    if ($LASTEXITCODE -ne 0) { throw 'Frontend image build failed.' }
+} elseif ([string]::IsNullOrWhiteSpace(($webImageId -join ''))) { throw "Prepare the web image $webImage before starting $Environment." }
 $postgresImageId = docker image ls --quiet postgres:16.15-alpine
 if ($LASTEXITCODE -ne 0) { throw 'Docker image inventory failed.' }
 if ([string]::IsNullOrWhiteSpace(($postgresImageId -join ''))) {
@@ -74,13 +74,25 @@ docker @composeArguments up -d postgres
 if ($LASTEXITCODE -ne 0) { throw 'Database startup failed.' }
 docker @composeArguments --profile tools run --rm migrate
 if ($LASTEXITCODE -ne 0) { throw 'Migration failed; API has not been started by this command.' }
+# Upgrade the earlier offline gateway only when both ownership labels match.
 if ($Environment -eq 'offline') {
-    docker @composeArguments up -d --wait --force-recreate gateway
-} else {
-    docker @composeArguments up -d --wait api
+    $legacyGateway = docker ps -aq --filter 'label=com.docker.compose.project=jsc-ticketing-offline' --filter 'label=com.docker.compose.service=gateway'
+    if ($legacyGateway) {
+        docker rm -f $legacyGateway | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw 'Legacy offline gateway could not be replaced.' }
+    }
+    $legacyNetwork = docker network ls -q --filter 'name=jsc-ticketing-offline_gateway' --filter 'label=com.docker.compose.project=jsc-ticketing-offline'
+    if ($legacyNetwork) {
+        $legacyDetails = (docker network inspect $legacyNetwork | ConvertFrom-Json)[0]
+        if ($legacyDetails.Name -eq 'jsc-ticketing-offline_gateway' -and @($legacyDetails.Containers.PSObject.Properties).Count -eq 0) {
+            docker network rm $legacyNetwork | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw 'Empty legacy offline network could not be replaced.' }
+        }
+    }
 }
+docker @composeArguments up -d --wait --remove-orphans api worker web
 if ($LASTEXITCODE -ne 0) { throw 'API did not become healthy.' }
-$port = if ($Environment -eq 'offline') { $configuration.services.gateway.ports[0].published } else { $configuration.services.api.ports[0].published }
+$port = $configuration.services.web.ports[0].published
 $url = "http://127.0.0.1:$port/api/v1/health/ready"
 $ready = Invoke-RestMethod $url
 if (!$ready.data.ready) { throw 'HTTP readiness verification failed.' }

@@ -72,7 +72,7 @@ final class TicketReader
             throw new ApiException(404, 'ticket_unavailable', 'Ticket unavailable.');
         }
         $statement = $this->db->prepare('SELECT t.id,t.reference,t.subject,t.description,t.custom_fields,
-            t.status,t.priority,t.confidentiality,t.origin_station_id,t.origin_province_id,t.origin_department_id,
+            t.requester_id,t.status,t.priority,t.confidentiality,t.resolution,t.run_number,t.origin_station_id,t.origin_province_id,t.origin_department_id,
             t.responsible_department_id,t.workflow_version_id,t.origin_assignment_id,t.origin_position_id,t.requester_snapshot,t.created_at,t.updated_at,t.version
             FROM tickets t WHERE t.id=CAST(:id AS uuid) AND ' . TicketScope::predicate());
         $statement->execute(['id' => $id, 'actor' => $actor]);
