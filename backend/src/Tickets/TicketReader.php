@@ -15,7 +15,7 @@ final class TicketReader
     public function listing(string $actor, array $query): array
     {
         foreach ($query as $key => $value) {
-            if (!in_array($key, ['q','status','cursor','limit'], true) || !is_string($value)) {
+            if (!in_array($key, [...Filters::KEYS,'cursor','limit'], true) || !is_string($value)) {
                 throw new ApiException(422, 'invalid_filter', 'Unsupported or invalid ticket filter.');
             }
         }
@@ -25,20 +25,7 @@ final class TicketReader
         }
         $where = [TicketScope::predicate()];
         $params = ['actor' => $actor];
-        if (isset($query['status'])) {
-            if (!in_array($query['status'], self::STATUSES, true)) {
-                throw new ApiException(422, 'invalid_status', 'Select a valid ticket status.');
-            }
-            $where[] = 't.status=:status';
-            $params['status'] = $query['status'];
-        }
-        if (isset($query['q']) && $query['q'] !== '') {
-            if (strlen($query['q']) > 200) {
-                throw new ApiException(422, 'invalid_search', 'Search must be at most 200 bytes.');
-            }
-            $where[] = "(t.subject ILIKE :search_subject ESCAPE '!' OR t.reference ILIKE :search_reference ESCAPE '!')";
-            $params['search_subject'] = $params['search_reference'] = '%' . str_replace(['!','%','_'], ['!!','!%','!_'], $query['q']) . '%';
-        }
+        [$filter,$filterParams]=Filters::build(array_diff_key($query,array_flip(['cursor','limit'])),$actor);$where[]='true'.$filter;$params+=$filterParams;
         if (isset($query['cursor'])) {
             $cursor = strlen($query['cursor']) <= 128 ? base64_decode($query['cursor'], true) : false;
             $parts = $cursor === false ? [] : explode('|', $cursor);

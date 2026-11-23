@@ -139,6 +139,7 @@ final class WorkflowService
         BusinessClock::due(new \DateTimeImmutable(),1,$graph->definition['calendar']??[]);
         foreach($graph->definition['default_cc_department_ids']??[]as$department){if(!Sql::run($this->db,'SELECT 1 FROM departments WHERE id=? AND active',[$department])->fetchColumn()){throw new \InvalidArgumentException('Default CC department is inactive or unavailable.');}}
         foreach($graph->nodes as $node){$config=$node['config']??[];
+            if($node['type']==='webhook'){LocalWebhook::requireEnabled();}
             if(isset($config['sla_minutes'])){BusinessClock::due(new \DateTimeImmutable(),$config['sla_minutes'],$graph->definition['calendar']??[]);}
             if(isset($config['department_id'])&&!Sql::run($this->db,'SELECT 1 FROM departments WHERE id=? AND active',[$config['department_id']])->fetchColumn()){throw new \InvalidArgumentException('Node department is inactive or unavailable.');}
             if(isset($config['position_id'])&&!Sql::run($this->db,'SELECT 1 FROM positions WHERE id=? AND active',[$config['position_id']])->fetchColumn()){throw new \InvalidArgumentException('Node position is inactive or unavailable.');}

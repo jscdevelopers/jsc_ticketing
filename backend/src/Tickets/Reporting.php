@@ -13,6 +13,16 @@ final class Reporting
 {
     public function __construct(private PDO $db) {}
 
+    public function choices(string$actor,string$resource,array$query):array
+    {
+        if(!in_array($resource,['stations','provinces','departments'],true)||array_diff(array_keys($query),['q','after','id'])||array_filter($query,static fn($v)=>!is_string($v))||strlen($query['q']??'')>200||(isset($query['after'])&&!TicketReader::uuid($query['after']))||(isset($query['id'])&&!TicketReader::uuid($query['id']))){throw new ApiException(422,'invalid_filter','Invalid report scope search.');}
+        $column=match($resource){'stations'=>'origin_station_id','provinces'=>'origin_province_id','departments'=>'responsible_department_id'};
+        $sql="SELECT d.id,d.name FROM $resource d WHERE EXISTS(SELECT 1 FROM tickets t WHERE t.$column=d.id AND ".TicketScope::predicate().')';$params=['actor'=>$actor];
+        foreach(['after'=>'>','id'=>'=']as$key=>$operator){if(isset($query[$key])){$sql.=' AND d.id'.$operator.'CAST(:'.$key.' AS uuid)';$params[$key]=$query[$key];}}
+        if(($query['q']??'')!==''){$sql.=" AND d.name ILIKE :q ESCAPE '!'";$params['q']='%'.str_replace(['!','%','_'],['!!','!%','!_'],$query['q']).'%';}
+        $rows=Sql::run($this->db,$sql.' ORDER BY d.id LIMIT 11',$params)->fetchAll();$more=count($rows)>10;if($more){array_pop($rows);}$last=end($rows);return['data'=>$rows,'meta'=>['next_after'=>$more?$last['id']:null]];
+    }
+
     public function dashboard(string $actor,array $query):array
     {
         if(array_diff(array_keys($query),['scope','id'])||array_filter($query,static fn($v)=>!is_string($v))||!in_array($query['scope']??'personal',['personal','authorized','station','province','department','national'],true)) {throw new ApiException(422,'invalid_scope','Select a valid dashboard scope.');}
@@ -40,13 +50,14 @@ final class Reporting
 
     public function export(string $actor,array $query):Response
     {
-        if(array_diff(array_keys($query),['status'])||(isset($query['status'])&&(!is_string($query['status'])||strlen($query['status'])>30))){throw new ApiException(422,'invalid_filter','Export supports a status filter.');}
+        $format=$query['format']??'csv';if(!in_array($format,['csv','pdf'],true)){throw new ApiException(422,'invalid_format','Choose CSV or PDF.');}unset($query['format']);[$filter,$filterParams]=Filters::build($query,$actor);
         if(!Sql::run($this->db,"SELECT 1 FROM app_users actor WHERE actor.id=? AND actor.active AND ".Access::roleSql('report.export')." AND EXISTS(SELECT 1 FROM scope_grants g WHERE g.user_id=actor.id AND g.permission_code='report.export' AND g.revoked_at IS NULL AND g.valid_from<=now() AND (g.valid_to IS NULL OR g.valid_to>now()))",[$actor])->fetchColumn()){throw new ApiException(403,'permission_denied','An explicit active export permission is required.');}
         $sql='SELECT t.reference,t.subject,t.status,t.priority,t.created_at FROM tickets t JOIN app_users actor ON actor.id=CAST(:export_actor AS uuid) WHERE '
             .TicketScope::predicate().' AND '.Access::roleSql('report.export').' AND '.Access::grantSql('report.export');
-        $params=['export_actor'=>$actor,'actor'=>$actor];if(isset($query['status'])){$sql.=' AND t.status=:status';$params['status']=$query['status'];}
+        $params=['export_actor'=>$actor,'actor'=>$actor,...$filterParams];$sql.=$filter;
         $rows=Sql::run($this->db,$sql.' ORDER BY t.created_at DESC,t.id LIMIT 1001',$params)->fetchAll();
         if(count($rows)>1000){throw new ApiException(422,'export_limit','Refine the filter to at most 1000 tickets.');}
+        if($format==='pdf'){$pdf=\App\Support\PdfReport::render($rows);Sql::run($this->db,"INSERT INTO security_events(event_type,actor_user_id,reason) VALUES ('REPORT_EXPORTED',?,?)",[$actor,'Authorized PDF rows: '.count($rows)]);return new Response($pdf,200,['Content-Type'=>'application/pdf','Content-Disposition'=>'attachment; filename="jsc-tickets.pdf"']);}
         $stream=fopen('php://temp','w+');fputcsv($stream,['Reference','Subject','Status','Priority','Created UTC'],',','"','');
         foreach($rows as$row){foreach($row as&$cell){if(is_string($cell)&&preg_match('/^[\s]*[=+@-]/u',$cell)){$cell="'".$cell;}}unset($cell);fputcsv($stream,array_values($row),',','"','');}
         rewind($stream);$csv=stream_get_contents($stream);fclose($stream);

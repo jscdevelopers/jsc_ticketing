@@ -1,0 +1,9 @@
+{
+  "notice": "Nonsecret placeholders only. Local development/offline use fictional organization records and deliberately labelled integration doubles.",
+  "staff_import": "Use scripts/setup-local-demo.ps1 locally; replace with an approved organization import before real use.",
+  "identity": {"local_mode": "password", "production_mode": "nauth", "private_config_env": "NAUTH_CONFIG_FILE", "registration": "UNCONFIGURED"},
+  "email": {"mode": "in_app_only", "smtp_host": "smtp.example.invalid", "external_delivery": false},
+  "malware": {"local_mode": "demo", "production_mode": "clamav", "local_antivirus_protection": false},
+  "webhook": {"mode": "local_audit_dummy", "endpoint_id": "local-audit", "external_delivery": false},
+  "hosting": {"mode": "local_only", "production_url": "https://ticketing.example.invalid"}
+}

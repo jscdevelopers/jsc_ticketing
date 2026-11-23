@@ -270,6 +270,8 @@ try {
     require __DIR__ . '/workflows.php';
     require __DIR__ . '/security-operations.php';
     require __DIR__ . '/participants.php';
+    require __DIR__ . '/reports.php';
+    require __DIR__ . '/local-webhook.php';
     require __DIR__ . '/local-demo.php';
     echo "PASS: $checks PostgreSQL integration and HTTP checks.\n";
 } finally {

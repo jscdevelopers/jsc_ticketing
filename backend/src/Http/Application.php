@@ -55,6 +55,8 @@ final class Application
                 $this->db()->query('SELECT id FROM workflow_executions LIMIT 0');
                 $this->db()->query('SELECT run_number FROM tickets LIMIT 0');
                 $this->db()->query('SELECT sha256,scan_provider FROM ticket_attachments LIMIT 0');
+                $this->db()->query('SELECT active FROM ticket_participants LIMIT 0');
+                $this->db()->query('SELECT owner_user_id FROM saved_reports LIMIT 0');
                 $this->db()->query('SELECT origin_assignment_id,origin_position_id,requester_snapshot FROM tickets LIMIT 0');
                 return Response::json(['ready' => true]);
             });
@@ -93,6 +95,10 @@ final class Application
                 $this->jsonBody($r);$service=new Participants($this->db());$method=$audienceAction==='privacy'?'privacy':'change';
                 return Response::json($service->$method($r->user['id'],$r->params['id'],$this->expectedVersion($r),$r->header('Idempotency-Key')??'',$r->body,$requestId));
             })->middleware($secure);}
+            $router->get('/reports',fn(Request$r)=>Response::json((new \App\Tickets\SavedReports($this->db()))->listing($r->user['id'],$r->query)))->middleware($secure);
+            $router->get('/reports/choices/{resource}',fn(Request$r)=>Response::json((new Reporting($this->db()))->choices($r->user['id'],$r->params['resource'],$r->query)))->middleware($secure);
+            $router->post('/reports',function(Request$r):Response{$this->jsonBody($r);return Response::json((new \App\Tickets\SavedReports($this->db()))->save($r->user['id'],null,0,$r->header('Idempotency-Key')??'',$r->body),201);})->middleware($secure);
+            $router->put('/reports/{id}',function(Request$r):Response{$this->jsonBody($r);return Response::json((new \App\Tickets\SavedReports($this->db()))->save($r->user['id'],$r->params['id'],$this->expectedVersion($r),$r->header('Idempotency-Key')??'',$r->body));})->middleware($secure);
             $router->get('/reports/export',fn(Request $r)=>(new Reporting($this->db()))->export($r->user['id'],$r->query))->middleware($secure);
             $router->get('/tickets/{id}/progress',fn(Request $r)=>Response::json((new Collaboration($this->db()))->progress($r->user['id'],$r->params['id'],$r->query)))->middleware($secure);
             $router->get('/tickets/{id}/attachments',fn(Request $r)=>Response::json((new Attachments($this->db()))->listing($r->user['id'],$r->params['id'],$r->query)))->middleware($secure);

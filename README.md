@@ -29,7 +29,7 @@ For a new installation without an administrator, provision one through `backend/
 ./scripts/setup-local-demo.ps1 -Environment offline
 ```
 
-Offline opens at **http://127.0.0.1:8187** with a separate database, private files and credentials. Its backend network blocks external routing. Both local environments deliberately use a labelled dummy file check, which is **not antivirus**. Real nAuth, email, approved staff import and hosting are outside the current local-only scope. Production has a tracked configuration template, not a running deployment.
+Offline opens at **http://127.0.0.1:8187** with a separate database, private files and credentials. Its backend network blocks external routing. Both local environments deliberately use a labelled dummy file check, which is **not antivirus**. Real nAuth, email, approved staff import and hosting are outside the current local-only scope; nonsecret placeholders are recorded in `config/integrations.example.json`. The local webhook node records an audit event without external delivery. Production has a tracked configuration template, not a running deployment.
 
 ## Working features
 
@@ -38,8 +38,8 @@ Offline opens at **http://127.0.0.1:8187** with a separate database, private fil
 - Versioned intake forms, saved drafts, private quarantined attachments, comments and requester information replies.
 - Guided workflow drafts, validation/simulation, independent publication, immutable versions, conditional routing, task pools, parallel ALL/ANY/quorum joins and timers.
 - Atomic claims, release/reassignment, candidate refresh, SLA pause/resume, rejection, withdrawal and historical reopen runs.
-- Summary-only CC/watchers, privacy classification, scoped dashboard counts, manager queues/SLA monitor, bounded CSV exports and an idempotent background worker.
-- Calendar/default CC policy editor, bounded send-back, publisher-only review and version-change summaries.
+- Summary-only CC/watchers, privacy classification, scoped dashboard counts, manager queues/SLA monitor, saved reports and bounded CSV/PDF exports and an idempotent background worker.
+- Calendar/default CC policy editor, bounded send-back, publisher-only review, version-change summaries and scope dashboard drill-downs.
 - Consistent local database/private-file backup and isolated restore verification.
 - Responsive operations UI with keyboard labels, Bootstrap icons, confirmations, toasts and focusable workflow stages.
 

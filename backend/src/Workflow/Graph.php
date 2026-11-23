@@ -26,9 +26,10 @@ final class Graph
         foreach($definition['nodes'] as $node) {
             if (!is_array($node) || !is_string($node['id']??null) || !preg_match('/^[a-z][a-z0-9_]{0,49}$/D',$node['id']) || isset($this->nodes[$node['id']])
                 || !is_string($node['label']??null) || strlen($node['label'])<1 || strlen($node['label'])>120
-                || !in_array($node['type']??'', ['start','intake','task','claim_pool','approval','route','decision','parallel_fork','parallel_join','request_info','timer','escalation','notification','resolve','close','end'],true)) { throw new InvalidArgumentException('Invalid, duplicate or unsupported workflow node.'); }
+                || !in_array($node['type']??'', ['start','intake','task','claim_pool','approval','route','decision','parallel_fork','parallel_join','request_info','timer','escalation','notification','webhook','resolve','close','end'],true)) { throw new InvalidArgumentException('Invalid, duplicate or unsupported workflow node.'); }
             $config=$node['config']??[];
             if (!is_array($config)) { throw new InvalidArgumentException('Invalid node configuration.'); }
+            if($node['type']==='webhook'){LocalWebhook::validate($config);}
             if (in_array($node['type'],['task','claim_pool','approval','route'],true)) {
                 if (!TicketReader::uuid($config['department_id']??'') || (in_array($node['type'],['task','claim_pool','approval'],true) && !TicketReader::uuid($config['position_id']??''))) { throw new InvalidArgumentException('Routing/task nodes require directory UUIDs.'); }
                 if (!in_array($config['scope']??'station',['station','province','department','national'],true)) { throw new InvalidArgumentException('Invalid task geography.'); }

@@ -113,6 +113,7 @@ final class Runtime
             $this->ticket['responsible_department_id']=$config['department_id'];
             Events::record($this->db,$this->ticket,null,$this->actor,'DEPARTMENT_ROUTED',null,null,['previous_department_id'=>$previous,'department_id'=>$config['department_id']],null,$this->requestId);
         }
+        if($type==='webhook'){LocalWebhook::validate($config);LocalWebhook::requireEnabled();Events::record($this->db,$this->ticket,null,$this->actor,'WEBHOOK_DEMO_RECORDED',null,null,['node_id'=>$nodeId,'endpoint_id'=>'local-audit','external_delivery'=>false],'Local integration dummy; no external request sent',$this->requestId);}
         if(in_array($type,['notification','escalation'],true)){Events::record($this->db,$this->ticket,null,$this->actor,strtoupper($type),null,null,['node_id'=>$nodeId],null,$this->requestId);}
         Sql::run($this->db,"UPDATE workflow_executions SET status='completed',completed_at=now() WHERE id=?",[$execution['id']]);
         if(!in_array($type,['end','close'],true)){foreach($this->graph->next($nodeId,$this->values()) as $next){$this->enter($next,$context);}}

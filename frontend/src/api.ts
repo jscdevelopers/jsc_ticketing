@@ -35,7 +35,7 @@ export class Api {
   }
   async download(path:string,query:Record<string,string>={}):Promise<void>{
     const blob=await firstValueFrom(this.http.get('/api/v1'+path,{headers:this.headers(),params:query,responseType:'blob'}));
-    const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='jsc-tickets.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+    const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=query['format']==='pdf'?'jsc-tickets.pdf':'jsc-tickets.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
   }
   clear():void{this.token='';this.intents.clear();}
   private headers():HttpHeaders{return new HttpHeaders(this.token?{Authorization:'Bearer '+this.token}:{});}
