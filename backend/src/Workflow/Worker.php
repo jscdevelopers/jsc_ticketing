@@ -27,7 +27,7 @@ final class Worker
                 if(Sql::run($this->db,'SELECT visibility FROM ticket_events WHERE id=?',[$job['event_id']])->fetchColumn()!=='internal'){$recipients=[];}
                 foreach(array_unique($recipients)as$actor){
                     try{(new TicketReader($this->db))->detail($actor,$payload['ticket_id']);}
-                    catch(ApiException $error){if(in_array($error->status,[403,404],true)){continue;}throw$error;}
+                    catch(ApiException $error){if(!in_array($error->status,[403,404],true)){throw$error;}try{(new \App\Tickets\Participants($this->db))->summary($actor,$payload['ticket_id']);}catch(ApiException){continue;}}
                     Sql::run($this->db,'INSERT INTO user_notifications(event_id,user_id,ticket_id) VALUES (?,?,?) ON CONFLICT(event_id,user_id) DO NOTHING',[$job['event_id'],$actor,$payload['ticket_id']]);
                 }
                 Sql::run($this->db,"UPDATE notification_outbox SET status='delivered',attempts=attempts+1,delivered_at=now(),last_error=null WHERE id=?",[$job['id']]);

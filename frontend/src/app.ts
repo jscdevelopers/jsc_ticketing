@@ -21,6 +21,7 @@ export class FormLabel implements AfterViewInit {
 @Component({selector:'app-root',standalone:true,imports:[CommonModule,FormsModule,Info,FormLabel],templateUrl:'./app.html'})
 export class App {
   api=inject(Api);
+  @ViewChild('shareDialog') shareDialog?:ElementRef<HTMLDialogElement>;
   @ViewChild('formDialog') dialog?:ElementRef<HTMLDialogElement>;
   user:any=null;page='dashboard';busy=false;loading=false;error='';mobileMenu=false;
   username='';password='';newPassword='';confirmPassword='';code='';challenge:any=null;mustChange=false;
@@ -28,6 +29,8 @@ export class App {
   rows:any[]=[];next:string|null=null;query='';status='';dashboard:any=null;
   detail:any=null;tasks:any[]=[];events:any[]=[];comments:any[]=[];progress:any[]=[];
   eventNext:string|null=null;commentNext:string|null=null;taskNext:string|null=null;
+  summary:any=null;participants:any[]=[];participantNext:string|null=null;shareDraft:any={kind:'user',participation:'cc',targets:[],reason:''};shareChoices:any[]=[];shareNext:string|null=null;shareQuery='';
+  defaultCc:string[]=[];workflowCalendar:any=null;workflowHolidays='';workflowEditable=true;workflowDiff:any=null;
   note='';noteSensitivity='public_internal';attachments:any[]=[];attachmentNext:string|null=null;uploadFile:File|null=null;fileClassification='internal';
   modal='';modalTitle='';draft:any={};assignments:any[]=[];categories:any[]=[];categorySchema:any=null;
   assignmentSearch='';categorySearch='';assignmentNext:string|null=null;categoryNext:string|null=null;
@@ -38,16 +41,16 @@ export class App {
   help=true;timezone='Africa/Harare';dashboardScope='personal';
   private loadSerial=0;private debounceTimer:any;private choiceTimers:Record<string,any>={};
   pages=[{id:'dashboard',name:'Overview',icon:'grid-1x2'},{id:'tickets',name:'My tickets',icon:'ticket-detailed'},
-    {id:'tasks',name:'My actions',icon:'inbox'},{id:'workflows',name:'Workflows',icon:'diagram-3'},
+    {id:'tasks',name:'My actions',icon:'inbox'},{id:'shared',name:'Shared with me',icon:'people'},{id:'queues',name:'Work queues',icon:'collection'},{id:'sla',name:'SLA monitor',icon:'alarm'},{id:'workflows',name:'Workflows',icon:'diagram-3'},
     {id:'directory',name:'Administration',icon:'building'},{id:'notifications',name:'Notifications',icon:'bell'},{id:'preferences',name:'Preferences',icon:'sliders'}];
   resources=['provinces','stations','departments','positions','users','assignments','categories','user-roles','scope-grants','roles','permissions','audit'];
   wizardSteps=['Basics','Form','Routing','Stages','Policies','Simulation','Review'];
   nodeTypes=['task','claim_pool','approval','decision','route','parallel_fork','parallel_join','request_info','timer','escalation','notification','resolve','close','end'];
   constructor(){try{const p=JSON.parse(localStorage.getItem('jsc-preferences')??'{}');this.help=p.help??true;this.timezone=p.timezone??'Africa/Harare';}catch{} }
-  private alert(options:SweetAlertOptions){return Swal.fire({...options,target:this.dialog?.nativeElement.open?this.dialog.nativeElement:document.body});}
+  private alert(options:SweetAlertOptions){return Swal.fire({...options,target:this.dialog?.nativeElement.open?this.dialog.nativeElement:this.shareDialog?.nativeElement.open?this.shareDialog.nativeElement:document.body});}
   can(permission:string):boolean{return !!this.user?.permissions?.includes(permission);}
-  visiblePage(id:string):boolean{return id!=='workflows'&&id!=='directory'||id==='workflows'&&this.can('workflow.design')||id==='directory'&&(this.can('directory.manage')||this.can('security.manage'));}
-  title(id=this.page):string{return this.pages.find(p=>p.id===id)?.name??'Ticket detail';}
+  visiblePage(id:string):boolean{if(['queues','sla'].includes(id))return this.can('task.manage');return id!=='workflows'&&id!=='directory'||id==='workflows'&&(this.can('workflow.design')||this.can('workflow.publish'))||id==='directory'&&(this.can('directory.manage')||this.can('security.manage'));}
+  title(id=this.page):string{return this.pages.find(p=>p.id===id)?.name??(id==='summary'?'Shared summary':'Ticket detail');}
   label(key:string):string{return key.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());}
   date(value:any):string{if(!value)return '—';try{return new Intl.DateTimeFormat('en-ZW',{dateStyle:'medium',timeStyle:'short',timeZone:this.timezone}).format(new Date(value));}catch{return String(value);}}
   entries(object:any):[string,any][]{return Object.entries(object??{});}
@@ -75,31 +78,33 @@ export class App {
     this.busy=true;try{await this.api.post('/auth/password',{current_password:this.password,new_password:this.newPassword});this.api.clear();this.mustChange=false;this.password='';this.newPassword='';this.confirmPassword='';this.toast('Password changed. Sign in with your new password.');}catch(e){this.failed(e);}finally{this.busy=false;}
   }
   async loadUser():Promise<void>{this.user=(await this.api.get('/me')).data;this.challenge=null;this.mustChange=false;await this.navigate('dashboard');}
-  async signOut():Promise<void>{try{await this.api.post('/auth/logout');}catch{}this.closeModal();this.api.clear();this.user=null;this.detail=null;this.password='';this.challenge=null;this.mustChange=false;}
-  async navigate(page:string):Promise<void>{this.page=page;this.mobileMenu=false;this.query='';this.status='';this.rows=[];this.next=null;this.error='';this.detail=null;await this.load();}
+  async signOut():Promise<void>{clearTimeout(this.debounceTimer);++this.loadSerial;if(this.shareDialog?.nativeElement.open)this.closeSharing();try{await this.api.post('/auth/logout');}catch{}this.closeModal();this.api.clear();this.user=null;this.detail=null;this.password='';this.challenge=null;this.mustChange=false;this.dashboardScope='personal';this.shareChoices=[];this.shareDraft={kind:'user',participation:'cc',targets:[],reason:''};}
+  async navigate(page:string):Promise<void>{clearTimeout(this.debounceTimer);++this.loadSerial;this.page=page;this.mobileMenu=false;this.query='';this.status='';this.rows=[];this.next=null;this.error='';this.detail=null;this.summary=null;await this.load();}
   search():void{clearTimeout(this.debounceTimer);this.debounceTimer=setTimeout(()=>{void this.load();},250);}
   async load(more=false):Promise<void>{
-    const serial=++this.loadSerial;this.loading=true;this.error='';
+    if(['detail','summary'].includes(this.page))return;const serial=++this.loadSerial;this.loading=true;this.error='';
     try{
       if(this.page==='dashboard'){this.dashboard=(await this.api.get('/dashboard',{scope:this.dashboardScope})).data;return;}
       if(this.page==='preferences')return;
       if(this.page==='directory'&&!Object.keys(this.resourceSchema).length){this.resourceSchema=(await this.api.get('/admin/schema')).data;}
-      const path=this.page==='tickets'?'/tickets':this.page==='tasks'?'/tasks':this.page==='workflows'?'/workflows':this.page==='directory'?'/admin/'+this.resource:'/notifications';
-      const q:Record<string,string>={};if(this.query&&this.page!=='notifications')q['q']=this.query;if(this.status&&['tickets','tasks'].includes(this.page))q['status']=this.status;
+      const path=this.page==='tickets'?'/tickets':['tasks','queues','sla'].includes(this.page)?'/tasks':this.page==='workflows'?'/workflows':this.page==='directory'?'/admin/'+this.resource:this.page==='shared'?'/shared':'/notifications';
+      const q:Record<string,string>={};if(this.query&&this.page!=='notifications')q['q']=this.query;if(this.status&&['tickets','tasks','queues','sla'].includes(this.page))q['status']=this.status;
+      if(['queues','sla'].includes(this.page))q['view']=this.page==='sla'?'overdue':'authorized';
       if(more&&this.next)q[this.page==='tickets'?'cursor':this.page==='notifications'?'before':'after']=this.next;
       const result=await this.api.get(path,q);if(serial!==this.loadSerial)return;
       this.rows=more?[...this.rows,...result.data]:result.data;this.next=result.meta.next_cursor??result.meta.next_after??result.meta.next_before??null;
     }catch(e){if(serial===this.loadSerial)this.failed(e);}finally{if(serial===this.loadSerial)this.loading=false;}
   }
   async openTicket(id:string):Promise<void>{
-    this.loading=true;this.error='';
+    clearTimeout(this.debounceTimer);const serial=++this.loadSerial;this.summary=null;this.loading=true;this.error='';
     try{
       if(this.detail?.id!==id){this.note='';try{this.note=localStorage.getItem(this.draftKey('comment:'+id))??'';}catch{}this.uploadFile=null;}
-      this.detail=(await this.api.get('/tickets/'+id)).data;this.page='detail';
-      const [tasks,events,comments,progress]=await Promise.all([this.api.get('/tickets/'+id+'/tasks'),this.api.get('/tickets/'+id+'/timeline'),this.api.get('/tickets/'+id+'/comments'),this.api.get('/tickets/'+id+'/progress')]);
-      await this.loadAttachments();
-      this.tasks=tasks.data;this.taskNext=tasks.meta.next_after??null;this.events=events.data;this.eventNext=events.meta.next_after??null;this.comments=comments.data;this.commentNext=comments.meta.next_after??null;this.progress=progress.data;
-    }catch(e){this.failed(e);}finally{this.loading=false;}
+      let detail:any;try{detail=(await this.api.get('/tickets/'+id)).data;}catch(error:any){if(error.status!==404)throw error;const summary=(await this.api.get('/tickets/'+id+'/summary')).data;if(serial!==this.loadSerial)return;this.summary=summary;this.detail=null;this.page='summary';return;}
+      if(serial!==this.loadSerial)return;this.detail=detail;this.page='detail';
+      const [tasks,events,comments,progress,files,members]=await Promise.all([this.api.get('/tickets/'+id+'/tasks'),this.api.get('/tickets/'+id+'/timeline'),this.api.get('/tickets/'+id+'/comments'),this.api.get('/tickets/'+id+'/progress'),this.api.get('/tickets/'+id+'/attachments'),this.api.get('/tickets/'+id+'/participants')]);
+      if(serial!==this.loadSerial)return;
+      this.tasks=tasks.data;this.taskNext=tasks.meta.next_after??null;this.events=events.data;this.eventNext=events.meta.next_after??null;this.comments=comments.data;this.commentNext=comments.meta.next_after??null;this.progress=progress.data;this.attachments=files.data;this.attachmentNext=files.meta.next_after??null;this.participants=members.data;this.participantNext=members.meta.next_after??null;
+    }catch(e){if(serial===this.loadSerial)this.failed(e);}finally{if(serial===this.loadSerial)this.loading=false;}
   }
   async moreDetail(kind:'events'|'comments'|'tasks'):Promise<void>{
     const cursor=kind==='events'?this.eventNext:kind==='comments'?this.commentNext:this.taskNext;if(!cursor)return;
@@ -116,6 +121,15 @@ export class App {
     if(!this.note.trim()||this.busy)return;this.busy=true;
     try{await this.api.post('/tickets/'+this.detail.id+'/'+(reply?'reply':'comments'),{body:this.note,sensitivity:this.noteSensitivity},Number(this.detail.version));this.note='';localStorage.removeItem(this.draftKey('comment:'+this.detail.id));this.toast(reply?'Reply recorded.':'Comment added.');await this.openTicket(this.detail.id);}catch(e){this.failed(e);}finally{this.busy=false;}
   }
+  async loadParticipants(more=false):Promise<void>{const r=await this.api.get('/tickets/'+this.detail.id+'/participants',more&&this.participantNext?{after:this.participantNext}:{});this.participants=more?[...this.participants,...r.data]:r.data;this.participantNext=r.meta.next_after??null;}
+  async openSharing():Promise<void>{try{this.shareDraft=JSON.parse(localStorage.getItem(this.draftKey('sharing:'+this.detail.id))??'null')??{kind:'user',participation:'cc',targets:[],reason:''};}catch{this.shareDraft={kind:'user',participation:'cc',targets:[],reason:''};}this.shareQuery='';this.shareDialog?.nativeElement.showModal();await this.loadShareChoices();}
+  rememberSharing():void{localStorage.setItem(this.draftKey('sharing:'+this.detail.id),JSON.stringify(this.shareDraft));}
+  closeSharing():void{this.rememberSharing();this.shareDialog?.nativeElement.close();}
+  async loadShareChoices(more=false):Promise<void>{try{const r=await this.api.get('/tickets/'+this.detail.id+'/participant-choices/'+(this.shareDraft.kind==='user'?'users':'departments'),{q:this.shareQuery,...(more&&this.shareNext?{after:this.shareNext}:{})});this.shareChoices=more?[...this.shareChoices,...r.data]:r.data;this.shareNext=r.meta.next_after??null;}catch(e){this.failed(e);}}
+  selectShare(choice:any):void{if(this.shareDraft.targets.length>=10){this.toast('Select at most ten recipients per change.','info');return;}if(!this.shareDraft.targets.some((t:any)=>t.id===choice.id&&t.kind===this.shareDraft.kind&&t.participation===this.shareDraft.participation))this.shareDraft.targets.push({id:choice.id,name:choice.name,kind:this.shareDraft.kind,participation:this.shareDraft.participation,active:true});this.rememberSharing();}
+  async saveSharing():Promise<void>{if(!(await this.alert({title:'Share ticket summaries?',text:'Recipients can see reference, category, department and status. This does not grant task or attachment access.',showCancelButton:true,confirmButtonText:'Share summaries',icon:'question'})).isConfirmed)return;this.busy=true;try{await this.api.post('/tickets/'+this.detail.id+'/participants',{reason:this.shareDraft.reason,targets:this.shareDraft.targets.map(({name,...t}:any)=>t)},Number(this.detail.version));localStorage.removeItem(this.draftKey('sharing:'+this.detail.id));this.shareDialog?.nativeElement.close();this.toast('Summary recipients updated.');await this.openTicket(this.detail.id);}catch(e){this.failed(e);}finally{this.busy=false;}}
+  async revokeParticipant(member:any):Promise<void>{const r=await this.alert({title:'Revoke this shared summary?',input:'textarea',inputLabel:'Reason *',inputValidator:v=>v.trim().length<3?'Reason required.':null,showCancelButton:true,confirmButtonText:'Revoke',icon:'warning'});if(!r.isConfirmed)return;this.busy=true;try{await this.api.post('/tickets/'+this.detail.id+'/participants',{reason:r.value,targets:[{id:member.user_id??member.department_id,kind:member.user_id?'user':'department',participation:member.participation,active:false}]},Number(this.detail.version));this.toast('Shared summary revoked.');await this.openTicket(this.detail.id);}catch(e){this.failed(e);}finally{this.busy=false;}}
+  async changePrivacy():Promise<void>{const classification=await this.alert({title:'Change ticket privacy',text:'Restricted or confidential classification immediately removes summary-only visibility and requires sensitive clearance.',input:'select',inputLabel:'Classification *',inputOptions:{internal:'Internal',restricted:'Restricted',confidential:'Confidential'},inputValue:this.detail.confidentiality,showCancelButton:true,confirmButtonText:'Continue'});if(!classification.isConfirmed)return;const reason=await this.alert({title:'Confirm privacy change',input:'textarea',inputLabel:'Reason *',inputValidator:v=>v.trim().length<3?'Reason required.':null,showCancelButton:true,confirmButtonText:'Change privacy',icon:'warning'});if(!reason.isConfirmed)return;this.busy=true;try{await this.api.post('/tickets/'+this.detail.id+'/privacy',{classification:classification.value,reason:reason.value},Number(this.detail.version));this.toast('Privacy classification updated.');await this.openTicket(this.detail.id);}catch(e){this.failed(e);}finally{this.busy=false;}}
   rememberComment():void{if(this.detail)localStorage.setItem(this.draftKey('comment:'+this.detail.id),this.note);}
   async loadAttachments(more=false):Promise<void>{const r=await this.api.get('/tickets/'+this.detail.id+'/attachments',more&&this.attachmentNext?{after:this.attachmentNext}:{});this.attachments=more?[...this.attachments,...r.data]:r.data;this.attachmentNext=r.meta.next_after??null;}
   chooseFile(event:Event):void{this.uploadFile=(event.target as HTMLInputElement).files?.[0]??null;}
@@ -143,7 +157,7 @@ export class App {
     this.categorySchema=null;this.showModal();await Promise.all([this.loadAssignments(),this.loadCategories()]);await this.selectCategory(false);
   }
   private async preserveChoice(path:string,rows:any[],id:string,key='id'):Promise<any[]>{if(!id||rows.some(r=>r[key]===id))return rows;const selected=(await this.api.get(path,{id})).data;return [...selected,...rows];}
-  searchChoice(kind:string):void{clearTimeout(this.choiceTimers[kind]);this.choiceTimers[kind]=setTimeout(()=>{if(kind==='assignments')void this.loadAssignments();else if(kind==='categories')void this.loadCategories();else if(kind.startsWith('workflow:'))void this.loadWorkflowChoice(kind.slice(9));else void this.loadReference(kind);},250);}
+  searchChoice(kind:string):void{clearTimeout(this.choiceTimers[kind]);this.choiceTimers[kind]=setTimeout(()=>{if(kind==='sharing')void this.loadShareChoices();else if(kind==='assignments')void this.loadAssignments();else if(kind==='categories')void this.loadCategories();else if(kind.startsWith('workflow:'))void this.loadWorkflowChoice(kind.slice(9));else void this.loadReference(kind);},250);}
   async loadAssignments(more=false):Promise<void>{try{const q:any={q:this.assignmentSearch};if(more&&this.assignmentNext)q.after=this.assignmentNext;const r=await this.api.get('/me/assignments',q);this.assignments=await this.preserveChoice('/me/assignments',more?[...this.assignments,...r.data]:r.data,this.draft.assignment_id);this.assignmentNext=r.meta.next_after??null;}catch(e){this.failed(e);}}
   async loadCategories(more=false):Promise<void>{try{const q:any={q:this.categorySearch};if(more&&this.categoryNext)q.after=this.categoryNext;const r=await this.api.get('/ticket-categories',q);this.categories=await this.preserveChoice('/ticket-categories',more?[...this.categories,...r.data]:r.data,this.draft.category_id);this.categoryNext=r.meta.next_after??null;}catch(e){this.failed(e);}}
   async selectCategory(clear=true):Promise<void>{const selected=this.categories.find(c=>c.id===this.draft.category_id);this.categorySchema=selected?.form_schema??null;if(clear){this.draft.fields={};for(const[key,rule]of this.entries(this.categorySchema?.properties)){if(rule.type==='boolean')this.draft.fields[key]=false;}}this.remember();}
@@ -177,10 +191,11 @@ export class App {
   savePreferences():void{try{new Intl.DateTimeFormat('en',{timeZone:this.timezone});localStorage.setItem('jsc-preferences',JSON.stringify({help:this.help,timezone:this.timezone}));this.toast('Preferences saved.');}catch{this.toast('Enter a valid time zone, for example Africa/Harare.','error');}}
 
   async newWorkflow(existing?:any):Promise<void>{
-    this.modal='workflow';this.modalTitle=existing?'Workflow draft':'New workflow';this.wizardStep=0;this.workflow=existing?.status==='draft'?existing:null;
+    this.modal='workflow';this.modalTitle=existing?'Workflow draft':'New workflow';this.wizardStep=0;this.workflowEditable=existing?.can_design??this.can('workflow.design');this.workflowDiff=null;this.workflow=existing?.status==='draft'?existing:null;
     let saved:any=null;if(!existing){try{saved=JSON.parse(localStorage.getItem(this.draftKey('workflow'))??'null');}catch{}}
     if(!existing&&saved?.workflow?.status==='draft')this.workflow=saved.workflow;
     const definition=existing?.definition??saved?.definition;
+    this.defaultCc=definition?.default_cc_department_ids??[];this.workflowCalendar={timezone:'Africa/Harare',days:[1,2,3,4,5],start:'08:00',end:'16:30',holidays:[],...(definition?.calendar??{})};this.workflowHolidays=this.workflowCalendar.holidays.join(', ');
     this.workflowCategory=existing?.category_id??saved?.category_id??'';this.workflowTitle=definition?.category_name??'';this.requireSecond=definition?.require_second_approver??true;
     this.workflowFields=Object.entries(definition?.form_schema?.properties??{}).map(([key,value]:[string,any])=>({key,...value,required:definition.form_schema.required?.includes(key)??false,options:(value.enum??[]).join(', ')}));
     this.nodes=definition?.nodes?structuredClone(definition.nodes):[{id:'start',type:'start',label:'Submitted',config:{}},{id:'work',type:'claim_pool',label:'Triage',config:{department_id:'',position_id:'',scope:'station',sla_minutes:240}},{id:'end',type:'end',label:'Closed',config:{}}];
@@ -188,7 +203,7 @@ export class App {
     this.simulation=null;this.showModal();this.references={};await this.loadWorkflowChoices();
   }
   async loadWorkflowChoices():Promise<void>{await Promise.all(['categories','departments','positions'].map(resource=>this.loadWorkflowChoice(resource)));}
-  async loadWorkflowChoice(resource:string,more=false):Promise<void>{const key='workflow_'+resource;try{const q:any={q:this.refQueries[key]??''};if(more&&this.refNext[key])q.after=this.refNext[key];const r=await this.api.get('/workflows/choices/'+resource,q);let rows=more?[...(this.references[key]??[]),...r.data]:r.data;const selected=resource==='categories'?[this.workflowCategory]:this.nodes.map(n=>n.config[resource==='departments'?'department_id':'position_id']);for(const id of new Set<string>(selected.filter(Boolean))){rows=await this.preserveChoice('/workflows/choices/'+resource,rows,id);}this.references[key]=rows;this.refNext[key]=r.meta.next_after??null;}catch(e){this.failed(e);}}
+  async loadWorkflowChoice(resource:string,more=false):Promise<void>{const key='workflow_'+resource;try{const q:any={q:this.refQueries[key]??''};if(more&&this.refNext[key])q.after=this.refNext[key];const r=await this.api.get('/workflows/choices/'+resource,q);let rows=more?[...(this.references[key]??[]),...r.data]:r.data;const selected=resource==='categories'?[this.workflowCategory]:[...this.nodes.map(n=>n.config[resource==='departments'?'department_id':'position_id']),...(resource==='departments'?this.defaultCc:[])];for(const id of new Set<string>(selected.filter(Boolean))){rows=await this.preserveChoice('/workflows/choices/'+resource,rows,id);}this.references[key]=rows;this.refNext[key]=r.meta.next_after??null;}catch(e){this.failed(e);}}
   addField():void{this.workflowFields.push({key:'field_'+(this.workflowFields.length+1),type:'string',title:'',required:false,options:''});this.rememberWorkflow();}
   addNode():void{this.nodes.splice(Math.max(1,this.nodes.length-1),0,{id:'step_'+Date.now().toString(36),type:'task',label:'New task',config:{department_id:'',position_id:'',scope:'station'}});this.rememberWorkflow();}
   removeNode(id:string):void{this.nodes=this.nodes.filter(n=>n.id!==id);this.edges=this.edges.filter(e=>e.from!==id&&e.to!==id);this.rememberWorkflow();}
@@ -198,11 +213,13 @@ export class App {
     for(const field of this.workflowFields){if(!field.key)continue;const rule:any={type:field.type};if(field.title)rule.title=field.title;if(field.options&&field.type!=='boolean')rule.enum=field.options.split(',').map((v:string)=>field.type==='string'?v.trim():Number(v.trim()));properties[field.key]=rule;if(field.required)required.push(field.key);}
     const category=(this.references['workflow_categories']??[]).find(c=>c.id===this.workflowCategory);
     return {engine:'workflow-v1',department_id:category?.department_id??'',category_name:this.workflowTitle,require_second_approver:this.requireSecond,
-      form_schema:{type:'object',properties,required,additionalProperties:false},nodes:this.nodes.map(node=>{const config:any={...node.config};for(const key of Object.keys(config)){if(config[key]===''||config[key]===null||config[key]===undefined)delete config[key];}return{id:node.id,type:node.type,label:node.label,config};}),
+      default_cc_department_ids:this.defaultCc,...(this.workflowCalendar?{calendar:this.workflowCalendar}:{}),form_schema:{type:'object',properties,required,additionalProperties:false},nodes:this.nodes.map(node=>{const config:any={...node.config};for(const key of Object.keys(config)){if(config[key]===''||config[key]===null||config[key]===undefined)delete config[key];}return{id:node.id,type:node.type,label:node.label,config};}),
       edges:this.edges.map(edge=>{const e:any={from:edge.from,to:edge.to};if(edge.otherwise)e.otherwise=true;else if(edge.variable)e.when={[edge.operator||'eq']:[{var:edge.variable},edge.value]};else if(edge.when)e.when=edge.when;return e;})};
   }
-  rememberWorkflow():void{this.simulation=null;localStorage.setItem(this.draftKey('workflow'),JSON.stringify({category_id:this.workflowCategory,definition:this.workflowDefinition(),workflow:this.workflow}));}
-  async saveWorkflow():Promise<boolean>{this.busy=true;this.rememberWorkflow();try{const r=await this.api.post('/workflows'+(this.workflow?'/'+this.workflow.id:''),{category_id:this.workflowCategory,definition:this.workflowDefinition()},this.workflow?Number(this.workflow.version):undefined,this.workflow?'PUT':'POST');this.workflow=r.data;this.rememberWorkflow();this.toast('Workflow draft saved.');return true;}catch(e){this.failed(e);return false;}finally{this.busy=false;}}
-  async simulateWorkflow():Promise<void>{if(!await this.saveWorkflow())return;if(!this.workflow)return;this.busy=true;try{this.simulation=(await this.api.post('/workflows/'+this.workflow.id+'/simulate',{'ticket.category':this.simCategory,'ticket.priority':this.simPriority,'step.outcome':'approve'})).data;this.toast('Simulation passed.');}catch(e){this.simulation=null;this.failed(e);}finally{this.busy=false;}}
+  toggleBusinessDay(day:number):void{this.workflowCalendar.days=this.workflowCalendar.days.includes(day)?this.workflowCalendar.days.filter((d:number)=>d!==day):[...this.workflowCalendar.days,day].sort();this.rememberWorkflow();}
+  updateHolidays():void{this.workflowCalendar.holidays=this.workflowHolidays.split(',').map(v=>v.trim()).filter(Boolean);this.rememberWorkflow();}
+  rememberWorkflow():void{this.simulation=null;this.workflowDiff=null;localStorage.setItem(this.draftKey('workflow'),JSON.stringify({category_id:this.workflowCategory,definition:this.workflowDefinition(),workflow:this.workflow}));}
+  async saveWorkflow():Promise<boolean>{if(!this.workflowEditable)return false;this.busy=true;this.rememberWorkflow();try{const r=await this.api.post('/workflows'+(this.workflow?'/'+this.workflow.id:''),{category_id:this.workflowCategory,definition:this.workflowDefinition()},this.workflow?Number(this.workflow.version):undefined,this.workflow?'PUT':'POST');this.workflow=r.data;this.rememberWorkflow();this.toast('Workflow draft saved.');return true;}catch(e){this.failed(e);return false;}finally{this.busy=false;}}
+  async simulateWorkflow():Promise<void>{if(this.workflowEditable&&!await this.saveWorkflow())return;if(!this.workflow)return;this.busy=true;try{this.simulation=(await this.api.post('/workflows/'+this.workflow.id+'/simulate',{'ticket.category':this.simCategory,'ticket.priority':this.simPriority,'step.outcome':'approve'})).data;this.workflowDiff=(await this.api.get('/workflows/'+this.workflow.id+'/review')).data;this.toast('Simulation passed.');}catch(e){this.simulation=null;this.failed(e);}finally{this.busy=false;}}
   async publishWorkflow():Promise<void>{if(!this.workflow||!this.simulation){this.toast('Save and simulate the current draft first.','error');return;}const result=await this.alert({title:'Publish this workflow?',text:'New submissions will use this immutable version. Existing tickets retain their version.',input:'textarea',inputLabel:'Approval reason *',inputValidator:v=>v.trim().length<3?'Reason required.':null,showCancelButton:true,confirmButtonText:'Publish',icon:'warning'});if(!result.isConfirmed)return;this.busy=true;try{await this.api.post('/workflows/'+this.workflow.id+'/publish',{reason:result.value},Number(this.workflow.version));localStorage.removeItem(this.draftKey('workflow'));this.dialog?.nativeElement.close();this.modal='';this.toast('Workflow published.');await this.load();}catch(e){this.failed(e);}finally{this.busy=false;}}
 }

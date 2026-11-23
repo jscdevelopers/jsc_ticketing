@@ -15,7 +15,7 @@ Open **http://127.0.0.1:8180**. The API is also available on loopback port 8186.
 | --- | --- |
 | requester.demo | Submit requests from Demo Station |
 | agent.demo | Claim and complete Demo ICT work |
-| manager.demo | Station oversight, reassignment, SLA controls, withdrawal/reopen and CSV |
+| manager.demo | Station oversight, sharing/privacy, reassignment, SLA controls, withdrawal/reopen and CSV |
 | designer.demo | Design department workflows |
 | publisher.demo | Independently approve department workflows |
 
@@ -38,7 +38,9 @@ Offline opens at **http://127.0.0.1:8187** with a separate database, private fil
 - Versioned intake forms, saved drafts, private quarantined attachments, comments and requester information replies.
 - Guided workflow drafts, validation/simulation, independent publication, immutable versions, conditional routing, task pools, parallel ALL/ANY/quorum joins and timers.
 - Atomic claims, release/reassignment, candidate refresh, SLA pause/resume, rejection, withdrawal and historical reopen runs.
-- Scoped dashboard counts, paged queues/history/notifications, bounded CSV exports and an idempotent background worker.
+- Summary-only CC/watchers, privacy classification, scoped dashboard counts, manager queues/SLA monitor, bounded CSV exports and an idempotent background worker.
+- Calendar/default CC policy editor, bounded send-back, publisher-only review and version-change summaries.
+- Consistent local database/private-file backup and isolated restore verification.
 - Responsive operations UI with keyboard labels, Bootstrap icons, confirmations, toasts and focusable workflow stages.
 
 See [local operations and limitations](docs/local_operations.md), [environment profiles](docs/environments.md), [architecture findings](docs/implementation_findings.md), [intake](docs/intake.md) and [executed validation](docs/validation.md). The full blueprint acceptance gate is not yet complete; outstanding items are recorded explicitly.

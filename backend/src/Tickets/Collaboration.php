@@ -17,7 +17,7 @@ final class Collaboration
     {
         return (bool)Sql::run($this->db,"SELECT 1 FROM tickets WHERE id=? AND (requester_id=CAST(? AS uuid)
             OR EXISTS(SELECT 1 FROM task_instances ti WHERE ti.ticket_id=tickets.id AND ti.claimed_by=CAST(? AS uuid))
-            OR EXISTS(SELECT 1 FROM ticket_participants tp WHERE tp.ticket_id=tickets.id AND tp.user_id=CAST(? AS uuid) AND tp.visibility IN ('ticket_details','restricted_details')))",[$ticket,$actor,$actor,$actor])->fetchColumn();
+            OR EXISTS(SELECT 1 FROM ticket_participants tp WHERE tp.ticket_id=tickets.id AND tp.user_id=CAST(? AS uuid) AND tp.active AND tp.visibility IN ('ticket_details','restricted_details')))",[$ticket,$actor,$actor,$actor])->fetchColumn();
     }
 
     public function comments(string $actor,string $ticket,array $query):array

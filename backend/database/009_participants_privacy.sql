@@ -1,0 +1,11 @@
+BEGIN;
+ALTER TABLE ticket_participants ADD COLUMN active boolean NOT NULL DEFAULT true;
+ALTER TABLE ticket_participants ADD COLUMN version integer NOT NULL DEFAULT 1;
+ALTER TABLE ticket_participants ADD COLUMN revoked_at timestamptz;
+CREATE INDEX idx_participants_user_active ON ticket_participants(user_id,ticket_id) WHERE active;
+CREATE INDEX idx_participants_department_active ON ticket_participants(department_id,ticket_id) WHERE active;
+INSERT INTO permissions(code,description) VALUES ('ticket.summary','Read an explicitly shared internal summary'),('ticket.share','Manage ticket CC and watchers'),('ticket.privacy','Change ticket privacy classification');
+INSERT INTO roles(code,title) VALUES ('ticket_observer','Shared ticket summary observer');
+INSERT INTO role_permissions(role_id,permission_code) SELECT id,'ticket.summary' FROM roles WHERE code IN ('ticket_reader','ticket_requester','task_agent','operations_admin','ticket_observer');
+INSERT INTO role_permissions(role_id,permission_code) SELECT r.id,p.code FROM roles r CROSS JOIN permissions p WHERE r.code='operations_admin' AND p.code IN ('ticket.share','ticket.privacy');
+COMMIT;

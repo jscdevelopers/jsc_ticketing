@@ -21,6 +21,17 @@ final class Runtime
 
     public function start():void { $this->enter($this->graph->start,[]);$this->refresh(); }
 
+    public function sendBack(array$execution,string$reason):void
+    {
+        $config=$this->graph->nodes[$execution['node_id']]['config']??[];
+        if(!isset($config['send_back_to'],$config['max_returns'])||json_decode($execution['context'],true,64,JSON_THROW_ON_ERROR)!==[]){throw new \App\Http\ApiException(422,'return_unavailable','This stage has no approved linear send-back policy.');}
+        $returns=(int)Sql::run($this->db,"SELECT count(*) FROM workflow_executions WHERE ticket_id=? AND run_number=? AND node_id=? AND outcome='sent_back'",[$this->ticket['id'],$this->ticket['run_number'],$execution['node_id']])->fetchColumn();
+        if($returns>=$config['max_returns']){throw new \App\Http\ApiException(409,'return_limit','The approved send-back limit is reached. Resolve or reject the task.');}
+        Sql::run($this->db,"UPDATE workflow_executions SET status='completed',outcome='sent_back',completed_at=now() WHERE id=?",[$execution['id']]);
+        Events::record($this->db,$this->ticket,null,$this->actor,'WORKFLOW_SENT_BACK',null,null,['from_node'=>$execution['node_id'],'target_node'=>$config['send_back_to'],'return_number'=>$returns+1],$reason,$this->requestId);
+        $this->enter($config['send_back_to'],[]);$this->refresh();
+    }
+
     public function finish(array $execution,string $outcome):void
     {
         Sql::run($this->db,"UPDATE workflow_executions SET status='completed',outcome=?,completed_at=now() WHERE id=?",[$outcome,$execution['id']]);

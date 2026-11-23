@@ -93,6 +93,7 @@ final class TicketSubmission
             $eventId = $query->fetchColumn();
             $query = $this->db->prepare("INSERT INTO notification_outbox(event_id,kind,dedupe_key,payload) VALUES (?,'ticket_submitted',?,CAST(? AS jsonb))");
             $query->execute([$eventId,'ticket-submitted-'.$ticket['id'],json_encode(['ticket_id'=>$ticket['id'],'event_id'=>$eventId,'recipient_user_id'=>$actor], JSON_THROW_ON_ERROR)]);
+            if($definition['default_cc_department_ids']??[]){Participants::defaults($this->db,$definition,\App\Support\Sql::run($this->db,'SELECT * FROM tickets WHERE id=?',[$ticket['id']])->fetch(),$actor,$requestId);}
             if(($definition['engine']??'')==='workflow-v1') {
                 (new \App\Workflow\Runtime($this->db,$ticket['id'],$actor,$requestId))->start();
                 $ticket=\App\Support\Sql::run($this->db,'SELECT id,reference,status,version,responsible_department_id,workflow_version_id FROM tickets WHERE id=?',[$ticket['id']])->fetch();

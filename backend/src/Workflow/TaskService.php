@@ -18,14 +18,22 @@ final class TaskService
 
     public function listing(string $actor,array $query,?string $ticketId=null):array
     {
-        if(array_diff(array_keys($query),['q','after','status']) || array_filter($query,static fn($v)=>!is_string($v)) || strlen($query['q']??'')>200
+        if(array_diff(array_keys($query),['q','after','status','view','department_id']) || array_filter($query,static fn($v)=>!is_string($v)) || strlen($query['q']??'')>200
             || (isset($query['after'])&&!TicketReader::uuid($query['after'])) || (isset($query['status'])&&!in_array($query['status'],['offered','claimed','in_progress','completed','blocked','cancelled','rejected'],true))) {throw new ApiException(422,'invalid_filter','Invalid task filter.');}
+        $view=$query['view']??'mine';
+        if(!in_array($view,['mine','authorized','overdue'],true)||(isset($query['department_id'])&&!TicketReader::uuid($query['department_id']))||($ticketId!==null&&$view!=='mine')){throw new ApiException(422,'invalid_view','Select a valid task queue view.');}
+        if($view!=='mine'&&!Sql::run($this->db,'SELECT 1 FROM app_users manager WHERE manager.id=? AND manager.active AND '.Access::roleSql('task.manage','manager')." AND EXISTS(SELECT 1 FROM scope_grants g WHERE g.user_id=manager.id AND g.permission_code='task.manage' AND g.revoked_at IS NULL AND g.valid_from<=now() AND (g.valid_to IS NULL OR g.valid_to>now()))",[$actor])->fetchColumn()){throw new ApiException(403,'permission_denied','An explicit active task management scope is required.');}
         if($ticketId!==null){(new TicketReader($this->db))->detail($actor,$ticketId);}
-        $sql='SELECT ti.*,e.label,e.node_type,t.reference,t.subject FROM task_instances ti JOIN tickets t ON t.id=ti.ticket_id
-            LEFT JOIN workflow_executions e ON e.id=ti.execution_id WHERE '.TicketScope::predicate();
+        $sql="SELECT ti.*,e.label,e.node_type,t.reference,t.subject,EXISTS(SELECT 1 FROM workflow_versions wv,jsonb_array_elements(wv.definition->'nodes') node WHERE wv.id=ti.workflow_version_id AND node->>'id'=ti.node_id AND node->'config'->>'send_back_to' IS NOT NULL) AS can_send_back FROM task_instances ti JOIN tickets t ON t.id=ti.ticket_id
+            LEFT JOIN workflow_executions e ON e.id=ti.execution_id WHERE ".TicketScope::predicate();
         $params=['actor'=>$actor];
         if($ticketId!==null){$sql.=' AND t.id=CAST(:ticket AS uuid)';$params['ticket']=$ticketId;}
-        else{$sql.=" AND EXISTS (SELECT 1 FROM task_candidates own WHERE own.task_id=ti.id AND own.user_id=CAST(:candidate AS uuid) AND own.revoked_at IS NULL)";$params['candidate']=$actor;}
+        elseif($view==='mine'){$sql.=" AND EXISTS (SELECT 1 FROM task_candidates own WHERE own.task_id=ti.id AND own.user_id=CAST(:candidate AS uuid) AND own.revoked_at IS NULL)";$params['candidate']=$actor;}
+        else{$sql.=' AND EXISTS(SELECT 1 FROM app_users manager WHERE manager.id=CAST(:manager AS uuid) AND '.Access::roleSql('task.manage','manager').' AND '.Access::grantSql('task.manage','manager','t','ti').')';$params['manager']=$actor;}
+        if($view==='authorized'&&!isset($query['status'])){$sql.=" AND ti.status IN ('offered','claimed','in_progress','blocked')";}
+        if($view==='overdue'){$sql.=" AND ti.status IN ('offered','claimed','in_progress','blocked') AND ti.due_at<now()";}
+        if(isset($query['department_id'])){$sql.=' AND ti.assigned_department_id=CAST(:department AS uuid)';$params['department']=$query['department_id'];}
+
         if(isset($query['status'])){$sql.=' AND ti.status=:status';$params['status']=$query['status'];}
         if(isset($query['after'])){$sql.=' AND ti.id>CAST(:after AS uuid)';$params['after']=$query['after'];}
         if(($query['q']??'')!==''){$sql.=" AND (t.subject||' '||t.reference||' '||COALESCE(e.label,ti.node_id)) ILIKE :search ESCAPE '!'";$params['search']='%'.str_replace(['!','%','_'],['!!','!%','!_'],$query['q']).'%';}
@@ -36,7 +44,7 @@ final class TaskService
     public function action(string $actor,string $id,string $action,int $version,string $key,array $body,string $requestId):array
     {
         if(!TicketReader::uuid($id)){throw new ApiException(404,'task_unavailable','Task unavailable.');}
-        if(!in_array($action,['claim','release','complete','approve','reject'],true) || array_diff(array_keys($body),['reason'])){throw new ApiException(422,'invalid_action','Unsupported task action or field.');}
+        if(!in_array($action,['claim','release','complete','approve','reject','send-back'],true) || array_diff(array_keys($body),['reason'])){throw new ApiException(422,'invalid_action','Unsupported task action or field.');}
         $reason=$action==='claim'?null:Mutation::reason($body['reason']??null);
         return Mutation::run($this->db,$actor,'task.'.$action.':'.$id,$key,['version'=>$version,...$body],function()use($actor,$id,$action,$version,$reason,$requestId):array {
             $ticketId=Sql::run($this->db,'SELECT ticket_id FROM task_instances WHERE id=?',[$id])->fetchColumn();
@@ -60,14 +68,14 @@ final class TaskService
                 if($action==='release') {
                     Sql::run($this->db,"UPDATE task_instances SET status='offered',claimed_by=null,claimed_at=null,version=version+1 WHERE id=?",[$id]);
                 } else {
-                    if(($task['node_type']==='approval' && !in_array($action,['approve','reject'],true)) || ($task['node_type']!=='approval' && $action!=='complete')) {throw new ApiException(422,'invalid_action','Use the action defined by this workflow step.');}
+                    if($action!=='send-back'&&(($task['node_type']==='approval' && !in_array($action,['approve','reject'],true)) || ($task['node_type']!=='approval' && $action!=='complete'))) {throw new ApiException(422,'invalid_action','Use the action defined by this workflow step.');}
                     if(!$task['execution_id']){throw new ApiException(409,'execution_unavailable','Task has no workflow execution.');}
                     $runtime=new Runtime($this->db,$ticketId,$actor,$requestId);
                     $runtime->assertSeparation($task);
                     Sql::run($this->db,"UPDATE task_instances SET status=?,completed_at=now(),version=version+1 WHERE id=?",[$action==='reject'?'rejected':'completed',$id]);
-                    Events::record($this->db,$ticket,$id,$actor,'TASK_'.strtoupper($action),$old,$action==='reject'?'rejected':'completed',[],$reason,$requestId);
+                    Events::record($this->db,$ticket,$id,$actor,'TASK_'.strtoupper(str_replace('-','_',$action)),$old,$action==='reject'?'rejected':'completed',[],$reason,$requestId);
                     $execution=Sql::run($this->db,'SELECT * FROM workflow_executions WHERE id=?',[$task['execution_id']])->fetch();
-                    if($action==='reject'){$runtime->reject($execution,$reason??'Approval rejected');}else{$runtime->finish($execution,$action);}
+                    if($action==='reject'){$runtime->reject($execution,$reason??'Approval rejected');}elseif($action==='send-back'){$runtime->sendBack($execution,$reason);}else{$runtime->finish($execution,$action);}
                     return $this->result($id);
                 }
             }

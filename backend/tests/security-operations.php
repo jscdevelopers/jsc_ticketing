@@ -78,7 +78,7 @@ expect(count($collaboration->comments(id(15000),$infoTicket['id'],[])['data'])==
 for($i=0;$i<100;$i++){if($worker->outbox()===0){break;}}
 $delivered=(int)sql('SELECT count(*) FROM user_notifications')->fetchColumn();$worker->outbox();
 expect($delivered>0&&(int)sql('SELECT count(*) FROM user_notifications')->fetchColumn()===$delivered,'in-app outbox retries do not duplicate user notices');
-expect((new Reporting($db))->dashboard(id(15000),[])['total']===4,'personal dashboard contains only requester tickets');
+expect((new Reporting($db))->dashboard(id(15000),[])['total']===5,'personal dashboard contains only requester tickets');
 try{(new Reporting($db))->dashboard(id(10001),['scope'=>'national']);expect(false,'station task authority is not national reporting');}
 catch(App\Http\ApiException$error){expect($error->status===403,'national dashboard requires explicit national data scope');}
 

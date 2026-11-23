@@ -19,6 +19,9 @@ final class Graph
             || !is_array($definition['form_schema']??null) || !is_array($definition['nodes']??null) || !is_array($definition['edges']??null)
             || count($definition['nodes'])<2 || count($definition['nodes'])>100 || count($definition['edges'])>200) { throw new InvalidArgumentException('Invalid bounded workflow definition.'); }
         IntakeSchema::validateDefinition($definition['form_schema']);
+        if(isset($definition['calendar'])&&!is_array($definition['calendar'])){throw new InvalidArgumentException('Business calendar must be an object.');}
+        $cc=$definition['default_cc_department_ids']??[];
+        if(!is_array($cc)||!array_is_list($cc)||count($cc)>10||count(array_unique($cc,SORT_REGULAR))!==count($cc)||array_filter($cc,static fn($id)=>!is_string($id)||!TicketReader::uuid($id))){throw new InvalidArgumentException('Default CC must contain at most ten distinct department UUIDs.');}
         $starts=[];$ends=[];
         foreach($definition['nodes'] as $node) {
             if (!is_array($node) || !is_string($node['id']??null) || !preg_match('/^[a-z][a-z0-9_]{0,49}$/D',$node['id']) || isset($this->nodes[$node['id']])
@@ -90,6 +93,22 @@ final class Graph
             foreach($this->edges[$id]??[]as$edge){$nextStack=$stack;if($node['type']==='parallel_fork'){$nextStack[]=['join'=>$node['config']['join_id'],'branch'=>$edge['to']];}$structure($edge['to'],$nextStack);}
         };
         $structure($this->start,[]);
+        foreach($this->nodes as$id=>$node){$config=$node['config']??[];if(isset($config['send_back_to'])){
+            $target=$config['send_back_to'];
+            if(!in_array($node['type'],['task','claim_pool','approval'],true)||!is_string($target)||$target===$id||!isset($this->nodes[$target])
+                ||!in_array($this->nodes[$target]['type'],['task','claim_pool','approval','request_info'],true)
+                ||!is_int($config['max_returns']??null)||$config['max_returns']<1||$config['max_returns']>10
+                ||$this->containsParallel($target,$id,[])                ||($contexts[$id]??'')!=='[]'||($contexts[$target]??'')!=='[]'||!$this->allPathsReach($target,$id,[])){
+                throw new InvalidArgumentException('Send-back requires a preceding linear work/information stage and a limit of 1..10 returns; parallel branches cannot be rewound.');
+            }
+        }}
+    }
+
+    private function containsParallel(string$node,string$stop,array$seen):bool
+    {
+        if($node===$stop||isset($seen[$node]))return false;$seen[$node]=true;
+        if(in_array($this->nodes[$node]['type'],['parallel_fork','parallel_join'],true))return true;
+        foreach($this->edges[$node]??[]as$edge){if($this->containsParallel($edge['to'],$stop,$seen))return true;}return false;
     }
 
     private function allPathsReach(string $node,string $target,array $seen):bool

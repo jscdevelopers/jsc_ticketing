@@ -33,7 +33,7 @@ final class Reporting
     {
         if(array_diff(array_keys($query),['before'])||(isset($query['before'])&&(!is_string($query['before'])||!preg_match('/^[0-9]{1,18}$/D',$query['before'])))){throw new ApiException(422,'invalid_cursor','Invalid notification cursor.');}
         $rows=Sql::run($this->db,'SELECT n.id,n.ticket_id,n.created_at,n.read_at,e.event_type FROM user_notifications n JOIN ticket_events e ON e.id=n.event_id JOIN tickets t ON t.id=n.ticket_id
-            WHERE n.user_id=CAST(:viewer AS uuid) AND n.id<CAST(:before AS bigint) AND '.TicketScope::predicate().' ORDER BY n.id DESC LIMIT 11',
+            WHERE n.user_id=CAST(:viewer AS uuid) AND n.id<CAST(:before AS bigint) AND ('.TicketScope::predicate().' OR '.Participants::summarySql().') ORDER BY n.id DESC LIMIT 11',
             ['viewer'=>$actor,'actor'=>$actor,'before'=>$query['before']??'9223372036854775807'])->fetchAll();
         $more=count($rows)>10;if($more){array_pop($rows);}$last=end($rows);return['data'=>$rows,'meta'=>['next_before'=>$more?(string)$last['id']:null]];
     }

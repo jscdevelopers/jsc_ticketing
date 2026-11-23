@@ -17,6 +17,7 @@ use App\Security\Administration;
 use App\Workflow\TaskManagement;
 use App\Tickets\Lifecycle;
 use App\Tickets\Attachments;
+use App\Tickets\Participants;
 use PDO;
 use Throwable;
 
@@ -84,6 +85,14 @@ final class Application
             })->middleware($secure);
             $router->get('/dashboard',fn(Request $r)=>Response::json((new Reporting($this->db()))->dashboard($r->user['id'],$r->query)))->middleware($secure);
             $router->get('/notifications',fn(Request $r)=>Response::json((new Reporting($this->db()))->notifications($r->user['id'],$r->query)))->middleware($secure);
+            $router->get('/shared',fn(Request$r)=>Response::json((new Participants($this->db()))->shared($r->user['id'],$r->query)))->middleware($secure);
+            $router->get('/tickets/{id}/summary',fn(Request$r)=>Response::json((new Participants($this->db()))->summary($r->user['id'],$r->params['id'])))->middleware($secure);
+            $router->get('/tickets/{id}/participants',fn(Request$r)=>Response::json((new Participants($this->db()))->listing($r->user['id'],$r->params['id'],$r->query)))->middleware($secure);
+            $router->get('/tickets/{id}/participant-choices/{kind}',fn(Request$r)=>Response::json((new Participants($this->db()))->choices($r->user['id'],$r->params['id'],$r->params['kind'],$r->query)))->middleware($secure);
+            foreach(['participants','privacy']as$audienceAction){$router->post('/tickets/{id}/'.$audienceAction,function(Request$r)use($audienceAction,$requestId):Response{
+                $this->jsonBody($r);$service=new Participants($this->db());$method=$audienceAction==='privacy'?'privacy':'change';
+                return Response::json($service->$method($r->user['id'],$r->params['id'],$this->expectedVersion($r),$r->header('Idempotency-Key')??'',$r->body,$requestId));
+            })->middleware($secure);}
             $router->get('/reports/export',fn(Request $r)=>(new Reporting($this->db()))->export($r->user['id'],$r->query))->middleware($secure);
             $router->get('/tickets/{id}/progress',fn(Request $r)=>Response::json((new Collaboration($this->db()))->progress($r->user['id'],$r->params['id'],$r->query)))->middleware($secure);
             $router->get('/tickets/{id}/attachments',fn(Request $r)=>Response::json((new Attachments($this->db()))->listing($r->user['id'],$r->params['id'],$r->query)))->middleware($secure);
@@ -107,7 +116,7 @@ final class Application
             }
             $router->get('/tasks',fn(Request $r)=>Response::json((new TaskService($this->db()))->listing($r->user['id'],$r->query)))->middleware($secure);
             $router->get('/tickets/{id}/tasks',fn(Request $r)=>Response::json((new TaskService($this->db()))->listing($r->user['id'],$r->query,$r->params['id'])))->middleware($secure);
-            foreach(['claim','release','complete','approve','reject']as$taskAction){
+            foreach(['claim','release','complete','approve','reject','send-back']as$taskAction){
                 $router->post('/tasks/{id}/'.$taskAction,function(Request $r)use($taskAction,$requestId):Response{
                     $this->jsonBody($r);
                     return Response::json((new TaskService($this->db()))->action($r->user['id'],$r->params['id'],$taskAction,$this->expectedVersion($r),$r->header('Idempotency-Key')??'',$r->body,$requestId));
@@ -121,6 +130,7 @@ final class Application
             $router->put('/workflows/{id}',function(Request $r):Response{
                 $this->jsonBody($r);return Response::json((new WorkflowService($this->db()))->save($r->user['id'],$r->params['id'],$this->expectedVersion($r),$r->header('Idempotency-Key')??'',$r->body));
             })->middleware($secure);
+            $router->get('/workflows/{id}/review',fn(Request$r)=>Response::json((new WorkflowService($this->db()))->review($r->user['id'],$r->params['id'])))->middleware($secure);
             $router->post('/workflows/{id}/simulate',function(Request $r):Response{
                 $this->jsonBody($r);return Response::json((new WorkflowService($this->db()))->simulate($r->user['id'],$r->params['id'],$r->body));
             })->middleware($secure);

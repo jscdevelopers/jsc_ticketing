@@ -24,15 +24,13 @@ final class WorkflowService
     public function listing(string $actor,array $query):array
     {
         if(array_diff(array_keys($query),['q','after']) || array_filter($query,static fn($v)=>!is_string($v)) || strlen($query['q']??'')>200 || (isset($query['after'])&&!TicketReader::uuid($query['after']))) {throw new ApiException(422,'invalid_filter','Invalid workflow filter.');}
-        $sql='SELECT w.*,c.name AS category_name FROM workflow_drafts w JOIN categories c ON c.id=w.category_id JOIN app_users actor ON actor.id=CAST(:actor AS uuid)
-            WHERE actor.active AND '.Access::roleSql('workflow.design')." AND EXISTS(SELECT 1 FROM scope_grants g WHERE g.user_id=actor.id AND g.permission_code='workflow.design'
-                AND (g.scope_kind='national' OR (g.scope_kind='department' AND g.scope_ref_id=c.department_id))
-                AND g.revoked_at IS NULL AND g.valid_from<=statement_timestamp() AND (g.valid_to IS NULL OR g.valid_to>statement_timestamp()))";
+        $sql='SELECT w.*,c.name AS category_name,c.department_id AS category_department_id FROM workflow_drafts w JOIN categories c ON c.id=w.category_id JOIN app_users actor ON actor.id=CAST(:actor AS uuid)
+            WHERE actor.active AND '.self::viewSql('c.department_id');
         $params=['actor'=>$actor];
         if(isset($query['after'])){$sql.=' AND w.id>CAST(:after AS uuid)';$params['after']=$query['after'];}
         if(($query['q']??'')!==''){$sql.=" AND c.name ILIKE :search ESCAPE '!'";$params['search']='%'.str_replace(['!','%','_'],['!!','!%','!_'],$query['q']).'%';}
         $rows=Sql::run($this->db,$sql.' ORDER BY w.id LIMIT 11',$params)->fetchAll();$more=count($rows)>10;if($more){array_pop($rows);}$last=end($rows);
-        foreach($rows as &$row){$row['definition']=json_decode($row['definition'],false,64,JSON_THROW_ON_ERROR);}
+        foreach($rows as &$row){$row['can_design']=true;try{Access::department($this->db,$actor,'workflow.design',$row['category_department_id']);}catch(ApiException){$row['can_design']=false;}$row['definition']=json_decode($row['definition'],false,64,JSON_THROW_ON_ERROR);}
         return ['data'=>$rows,'meta'=>['next_after'=>$more?$last['id']:null]];
     }
 
@@ -40,13 +38,31 @@ final class WorkflowService
     {
         if(!in_array($resource,['categories','departments','positions','stations','provinces'],true)||array_diff(array_keys($query),['q','after','id'])||array_filter($query,static fn($v)=>!is_string($v))||(isset($query['id'])&&!TicketReader::uuid($query['id']))||strlen($query['q']??'')>200||(isset($query['after'])&&!TicketReader::uuid($query['after']))){throw new ApiException(422,'invalid_filter','Invalid workflow choice filter.');}
         $label=$resource==='positions'?'title':'name';
-        $sql="SELECT c.* FROM $resource c JOIN app_users actor ON actor.id=CAST(:actor AS uuid) WHERE actor.active AND c.active AND ".Access::roleSql('workflow.design').
-            " AND EXISTS(SELECT 1 FROM scope_grants g WHERE g.user_id=actor.id AND g.permission_code='workflow.design'
-                AND g.revoked_at IS NULL AND g.valid_from<=now() AND (g.valid_to IS NULL OR g.valid_to>now())"
-                .($resource==='categories'?" AND (g.scope_kind='national' OR (g.scope_kind='department' AND g.scope_ref_id=c.department_id))":'').')';
+        $sql="SELECT c.* FROM $resource c JOIN app_users actor ON actor.id=CAST(:actor AS uuid) WHERE actor.active AND c.active AND ".self::viewSql($resource==='categories'?'c.department_id':null);
         $params=['actor'=>$actor];if(isset($query['id'])){$sql.=' AND c.id=CAST(:choice_id AS uuid)';$params['choice_id']=$query['id'];}if(isset($query['after'])){$sql.=' AND c.id>CAST(:after AS uuid)';$params['after']=$query['after'];}
         if(($query['q']??'')!==''){$sql.=" AND c.$label ILIKE :q ESCAPE '!'";$params['q']='%'.str_replace(['!','%','_'],['!!','!%','!_'],$query['q']).'%';}
         $rows=Sql::run($this->db,$sql.' ORDER BY c.id LIMIT 11',$params)->fetchAll();$more=count($rows)>10;if($more){array_pop($rows);}$last=end($rows);return['data'=>$rows,'meta'=>['next_after'=>$more?$last['id']:null]];
+    }
+
+    private static function viewSql(?string$department):string
+    {
+        return "EXISTS(SELECT 1 FROM user_roles vr JOIN role_permissions vp ON vp.role_id=vr.role_id JOIN scope_grants vg ON vg.user_id=vr.user_id AND vg.permission_code=vp.permission_code
+            WHERE vr.user_id=actor.id AND vp.permission_code IN ('workflow.design','workflow.publish') AND vr.valid_from<=now() AND (vr.valid_to IS NULL OR vr.valid_to>now())
+            AND vg.revoked_at IS NULL AND vg.valid_from<=now() AND (vg.valid_to IS NULL OR vg.valid_to>now()) AND ".($department===null?"vg.scope_kind IN ('national','department')":"(vg.scope_kind='national' OR (vg.scope_kind='department' AND vg.scope_ref_id=$department))").')';
+    }
+    private function reviewDraft(string$actor,string$id):array
+    {
+        try{return$this->draft($actor,$id,'workflow.design');}catch(ApiException$error){if($error->status!==403)throw$error;return$this->draft($actor,$id,'workflow.publish');}
+    }
+    public function review(string$actor,string$id):array
+    {
+        $row=$this->reviewDraft($actor,$id);$definition=json_decode($row['definition'],true,64,JSON_THROW_ON_ERROR);
+        $published=Sql::run($this->db,"SELECT v.version,v.definition FROM workflow_templates t JOIN workflow_versions v ON v.id=t.active_version_id WHERE t.category_id=?",[$row['category_id']])->fetch();
+        $before=$published?json_decode($published['definition'],true,64,JSON_THROW_ON_ERROR):[];
+        $old=array_column($before['nodes']??[],null,'id');$new=array_column($definition['nodes']??[],null,'id');$changes=[];
+        foreach($new as$key=>$node){if(!isset($old[$key])||Mutation::canonical($old[$key])!==Mutation::canonical($node))$changes[]=['id'=>$key,'label'=>$node['label'],'change'=>isset($old[$key])?'changed':'added'];}
+        foreach($old as$key=>$node){if(!isset($new[$key]))$changes[]=['id'=>$key,'label'=>$node['label'],'change'=>'removed'];}
+        return['base_version'=>$published?(int)$published['version']:null,'node_changes'=>$changes,'form_changed'=>($before['form_schema']??null)!==($definition['form_schema']??null),'routing_changed'=>($before['edges']??[])!==($definition['edges']??[]),'policies_changed'=>array_diff_key($before,array_flip(['nodes','edges','form_schema']))!==array_diff_key($definition,array_flip(['nodes','edges','form_schema']))];
     }
 
     public function save(string $actor,?string $id,int $version,string $key,array $body):array
@@ -71,7 +87,7 @@ final class WorkflowService
 
     public function simulate(string $actor,string $id,array $values):array
     {
-        $row=$this->draft($actor,$id,'workflow.design');$definition=json_decode($row['definition'],true,64,JSON_THROW_ON_ERROR);
+        $row=$this->reviewDraft($actor,$id);$definition=json_decode($row['definition'],true,64,JSON_THROW_ON_ERROR);
         try{$graph=new Graph($definition);$this->validateDirectory($graph);}
         catch(\InvalidArgumentException $error){throw new ApiException(422,'invalid_workflow',$error->getMessage());}
         if(count($values)>40||array_filter($values,static fn($v)=>!is_scalar($v)&&$v!==null)){throw new ApiException(422,'invalid_context','Simulation requires scalar captured values.');}
@@ -120,6 +136,8 @@ final class WorkflowService
 
     private function validateDirectory(Graph $graph):void
     {
+        BusinessClock::due(new \DateTimeImmutable(),1,$graph->definition['calendar']??[]);
+        foreach($graph->definition['default_cc_department_ids']??[]as$department){if(!Sql::run($this->db,'SELECT 1 FROM departments WHERE id=? AND active',[$department])->fetchColumn()){throw new \InvalidArgumentException('Default CC department is inactive or unavailable.');}}
         foreach($graph->nodes as $node){$config=$node['config']??[];
             if(isset($config['sla_minutes'])){BusinessClock::due(new \DateTimeImmutable(),$config['sla_minutes'],$graph->definition['calendar']??[]);}
             if(isset($config['department_id'])&&!Sql::run($this->db,'SELECT 1 FROM departments WHERE id=? AND active',[$config['department_id']])->fetchColumn()){throw new \InvalidArgumentException('Node department is inactive or unavailable.');}

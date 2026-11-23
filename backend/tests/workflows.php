@@ -130,3 +130,26 @@ $friday=new DateTimeImmutable('2026-11-20T14:00:00Z');
 expect(BusinessClock::due($friday,120)->format(DATE_ATOM)==='2026-11-23T07:30:00+00:00','SLA skips weekend in Africa/Harare');
 expect(BusinessClock::due($friday,120,['holidays'=>['2026-11-23']])->format('Y-m-d')==='2026-11-24','SLA skips configured holiday');
 expect(BusinessClock::due(new DateTimeImmutable('2026-03-06T21:00:00Z'),120,['timezone'=>'America/New_York'])->format(DATE_ATOM)==='2026-03-09T13:30:00+00:00','SLA handles DST boundary in local business calendar');
+
+// A send-back is an explicitly bounded linear transition, retaining every prior execution.
+$returnFlow=$definition;$returnFlow['nodes']=[['id'=>'start','type'=>'start','label'=>'Submitted'],['id'=>'question','type'=>'request_info','label'=>'Requester clarification'],$definition['nodes'][1],$definition['nodes'][2]];
+$returnFlow['nodes'][2]['config']['send_back_to']='question';$returnFlow['nodes'][2]['config']['max_returns']=1;
+$returnFlow['edges']=[['from'=>'start','to'=>'question'],['from'=>'question','to'=>'work'],['from'=>'work','to'=>'end']];
+$newReturnGraph=new Graph($returnFlow);
+$invalidReturn=$returnFlow;$invalidReturn['nodes'][2]['config']['max_returns']=0;
+try{new Graph($invalidReturn);expect(false,'unbounded return rejected');}catch(InvalidArgumentException){expect(true,'send-back requires an explicit positive execution bound');}
+$returnDraft=$workflows->save(id(106),null,0,'return-draft',['category_id'=>id(16000),'definition'=>$returnFlow])['data'];$workflows->publish(id(101),$returnDraft['id'],1,'return-publish','Approved bounded clarification return');
+$returnTicket=$submission->submit(id(15000),$workflowBody,'return-ticket','test')['ticket'];
+$collaborationReturn=new App\Tickets\Collaboration($db);
+$collaborationReturn->comment(id(15000),$returnTicket['id'],$returnTicket['version'],'return-reply-one',['body'=>'Initial clarification','sensitivity'=>'public_internal'],'test',true);
+$returnTask=sql('SELECT * FROM task_instances WHERE ticket_id=?',[$returnTicket['id']])->fetch();$returnTasks=new TaskService($db);
+$claimedReturn=$returnTasks->action(id(10001),$returnTask['id'],'claim',1,'return-claim-one',[],'test')['data'];
+$returnTasks->action(id(10001),$returnTask['id'],'send-back',$claimedReturn['version'],'return-action',['reason'=>'One more clarification is required'],'test');
+expect(sql('SELECT status FROM tickets WHERE id=?',[$returnTicket['id']])->fetchColumn()==='awaiting_input','send-back activates the approved previous information stage');
+expect((int)sql("SELECT count(*) FROM workflow_executions WHERE ticket_id=? AND outcome='sent_back'",[$returnTicket['id']])->fetchColumn()===1,'send-back preserves the completed stage and outcome');
+$version=(int)sql('SELECT version FROM tickets WHERE id=?',[$returnTicket['id']])->fetchColumn();$collaborationReturn->comment(id(15000),$returnTicket['id'],$version,'return-reply-two',['body'=>'Further clarification','sensitivity'=>'public_internal'],'test',true);
+$returnTask=sql("SELECT * FROM task_instances WHERE ticket_id=? AND status='offered'",[$returnTicket['id']])->fetch();$claimedReturn=$returnTasks->action(id(10001),$returnTask['id'],'claim',1,'return-claim-two',[],'test')['data'];
+try{$returnTasks->action(id(10001),$returnTask['id'],'send-back',$claimedReturn['version'],'return-over-limit',['reason'=>'This would exceed the approved limit'],'test');expect(false,'second return must fail');}catch(ApiException$error){expect($error->status===409,'send-back cannot exceed its per-run bound');}
+expect(sql('SELECT status FROM task_instances WHERE id=?',[$returnTask['id']])->fetchColumn()==='claimed','failed send-back rolls task status and audit back');
+$returnTasks->action(id(10001),$returnTask['id'],'complete',$claimedReturn['version'],'return-complete',['reason'=>'Clarification accepted'],'test');
+expect(sql('SELECT status FROM tickets WHERE id=?',[$returnTicket['id']])->fetchColumn()==='closed','returned work can finish normally after its limit is reached');
