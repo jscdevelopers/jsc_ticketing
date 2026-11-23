@@ -1,5 +1,7 @@
 # Local operations
 
+For the populated Zimbabwe JSC operating model, renamed logins and source limitations, use [JSC sample setup](jsc_samples.md). Credentials for the new account names are in `secrets/<environment>/jsc_passwords.json`. Existing chosen passwords are preserved.
+
 ## Identity and administration
 
 Local development/offline use password authentication. Passwords are bcrypt hashes; bearer sessions remain in browser memory, expire within 24 hours and can be revoked. A temporary-password session can only change the password or sign out. Changing/resetting a password invalidates sessions and pending MFA challenges. Login is throttled by account and network address.

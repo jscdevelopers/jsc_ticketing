@@ -12,17 +12,18 @@ final class Administration
 {
     public function __construct(private PDO $db) {}
     public const FIELDS=[
+        'court-levels'=>['code'=>'string','name'=>'string','active'=>'boolean'],
         'provinces'=>['code'=>'string','name'=>'string','active'=>'boolean'],
-        'stations'=>['code'=>'string','name'=>'string','province_id'=>'nullable_uuid','is_secretariat_station'=>'boolean','active'=>'boolean'],
-        'departments'=>['code'=>'string','name'=>'string','active'=>'boolean'],
-        'positions'=>['code'=>'string','title'=>'string','active'=>'boolean'],
+        'stations'=>['code'=>'string','name'=>'string','province_id'=>'nullable_uuid','court_level_id'=>'nullable_uuid','is_secretariat_station'=>'boolean','active'=>'boolean'],
+        'departments'=>['code'=>'string','name'=>'string','parent_id'=>'nullable_uuid','active'=>'boolean'],
+        'positions'=>['code'=>'string','title'=>'string','reports_to_position_id'=>'nullable_uuid','active'=>'boolean'],
         'categories'=>['department_id'=>'uuid','code'=>'string','name'=>'string','parent_id'=>'nullable_uuid','active'=>'boolean'],
         'users'=>['external_subject'=>'string','display_name'=>'string','email'=>'nullable_email','active'=>'boolean'],
         'assignments'=>['user_id'=>'uuid','position_id'=>'uuid','department_id'=>'uuid','station_id'=>'uuid','begins_at'=>'date','ends_at'=>'nullable_date','is_acting'=>'boolean'],
         'user-roles'=>['user_id'=>'uuid','role_id'=>'uuid','valid_from'=>'date','valid_to'=>'nullable_date'],
         'scope-grants'=>['user_id'=>'uuid','permission_code'=>'string','scope_kind'=>'scope','scope_ref_id'=>'nullable_uuid','valid_from'=>'date','valid_to'=>'nullable_date','grant_reason'=>'string'],
     ];
-    private const TABLES=['users'=>'app_users','assignments'=>'staff_assignments','user-roles'=>'user_roles','scope-grants'=>'scope_grants'];
+    private const TABLES=['court-levels'=>'court_levels','users'=>'app_users','assignments'=>'staff_assignments','user-roles'=>'user_roles','scope-grants'=>'scope_grants'];
 
     public function schema(string $actor):array
     {
@@ -47,7 +48,7 @@ final class Administration
             $sql.=" AND $key>?";$params[]=$query['after'];
         }
         if(($query['q']??'')!==''){
-            $fields=match($resource){'users'=>['display_name','email'],'provinces','stations','departments','categories'=>['code','name'],'positions','roles'=>['code','title'],'permissions'=>['code','description'],'audit'=>['event_type','reason'],default=>['id::text']};
+            $fields=match($resource){'users'=>['display_name','email'],'court-levels','provinces','stations','departments','categories'=>['code','name'],'positions','roles'=>['code','title'],'permissions'=>['code','description'],'audit'=>['event_type','reason'],default=>['id::text']};
             $sql.=' AND ('.implode("||' '||",array_map(static fn($f)=>"COALESCE($f,'')",$fields)).") ILIKE ? ESCAPE '!'";
             $params[]='%'.str_replace(['!','%','_'],['!!','!%','!_'],$query['q']).'%';
         }
@@ -60,7 +61,7 @@ final class Administration
         $table=$this->table($resource);Access::national($this->db,$actor,$this->permission($resource));
         if(!isset(self::FIELDS[$resource])||$resource==='scope-grants'&&$id!==null){throw new ApiException(422,'immutable_resource','This resource is read-only; revoke scope grants rather than editing them.');}
         if($id!==null&&!TicketReader::uuid($id)){throw new ApiException(404,'resource_unavailable','Record unavailable.');}
-        $fields=self::FIELDS[$resource];
+        $fields=self::FIELDS[$resource];foreach(['court_level_id','parent_id','reports_to_position_id']as$optional){if(isset($fields[$optional])&&!array_key_exists($optional,$body))$body[$optional]=null;}
         if(array_diff(array_keys($body),[...array_keys($fields),'reason'])||array_diff(array_keys($fields),array_keys($body))){throw new ApiException(422,'invalid_record','Supply every field defined by the resource schema.');}
         $reason=Mutation::reason($body['reason']??null);$values=[];
         foreach($fields as$name=>$type){$value=$body[$name];
@@ -83,6 +84,7 @@ final class Administration
             $targets=['station'=>'stations','province'=>'provinces','department'=>'departments','ticket_explicit'=>'tickets'];
             if(isset($targets[$kind])&&!Sql::run($this->db,'SELECT 1 FROM '.$targets[$kind].' WHERE id=?',[$ref])->fetchColumn()){throw new ApiException(422,'invalid_scope','Scope target unavailable.');}
         }
+        if(in_array($resource,['departments','positions'],true)){$parentField=$resource==='departments'?'parent_id':'reports_to_position_id';$parentId=$body[$parentField];if($parentId!==null&&$id!==null&&Sql::run($this->db,"WITH RECURSIVE parents AS (SELECT id,$parentField FROM $table WHERE id=? UNION SELECT d.id,d.$parentField FROM $table d JOIN parents p ON d.id=p.$parentField) SELECT 1 FROM parents WHERE id=?",[$parentId,$id])->fetchColumn()){throw new ApiException(422,'hierarchy_cycle','An organizational record cannot report to itself or its descendant.');}}
         if($resource==='categories'&&$body['parent_id']!==null){
             $parent=Sql::run($this->db,'SELECT department_id FROM categories WHERE id=?',[$body['parent_id']])->fetchColumn();
             if($parent!==$body['department_id']){throw new ApiException(422,'invalid_parent','Parent category must belong to the same department.');}

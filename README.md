@@ -6,27 +6,27 @@ Local Angular + PHP/Nite + PostgreSQL ticket and workflow application. The suppl
 
 ```powershell
 ./scripts/run-environment.ps1 -Environment development -Build
-./scripts/setup-local-demo.ps1 -Environment development
+./scripts/setup-jsc-samples.ps1 -Environment development
 ```
 
-Open **http://127.0.0.1:8180**. The API is also available on loopback port 8186. Demo setup adds fictional organization records and five scoped accounts without changing existing users:
+Open **http://127.0.0.1:8180**. The API is also available on loopback port 8186. JSC sample setup installs representative Zimbabwe court offices, departments, reporting positions and operational requests. See [structure, sources and account scopes](docs/jsc_samples.md).
 
 | Username | Purpose |
 | --- | --- |
-| requester.demo | Submit requests from Demo Station |
-| agent.demo | Claim and complete Demo ICT work |
-| manager.demo | Station oversight, sharing/privacy, reassignment, SLA controls, withdrawal/reopen and CSV |
-| designer.demo | Design department workflows |
-| publisher.demo | Independently approve department workflows |
+| registry.harare | Submit requests from Harare Magistrates Court |
+| ict.harare | Claim and complete ICT work |
+| station.manager | Station oversight, sharing/privacy, reassignment, SLA controls, withdrawal/reopen and CSV |
+| workflow.designer | Design department workflows |
+| workflow.publisher | Independently approve department workflows |
 
-Initial passwords are generated privately in `secrets/development/demo_passwords.json` and must be changed at first sign-in. Setup can be repeated safely and never resets passwords. The initial `administrator` account, if already provisioned, remains configuration-only; its password is unchanged. No default credential is committed.
+Initial passwords are generated privately in `secrets/development/jsc_passwords.json` and must be changed at first sign-in. Setup can be repeated safely and never resets passwords; the five legacy sample logins are renamed while retaining their existing passwords. The initial `administrator` account, if already provisioned, remains configuration-only; its password is unchanged. No default credential is committed.
 
 For a new installation without an administrator, provision one through `backend/bin/setup.php USERNAME` with the password on standard input; see the [operator guide](docs/local_operations.md).
 
 ```powershell
 # Uses cached images; no image build or pull during offline startup.
 ./scripts/run-environment.ps1 -Environment offline
-./scripts/setup-local-demo.ps1 -Environment offline
+./scripts/setup-jsc-samples.ps1 -Environment offline
 ```
 
 Offline opens at **http://127.0.0.1:8187** with a separate database, private files and credentials. Its backend network blocks external routing. Both local environments deliberately use a labelled dummy file check, which is **not antivirus**. Real nAuth, email, approved staff import and hosting are outside the current local-only scope; nonsecret placeholders are recorded in `config/integrations.example.json`. The local webhook node records an audit event without external delivery. Production has a tracked configuration template, not a running deployment.

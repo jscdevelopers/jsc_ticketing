@@ -1,0 +1,364 @@
+{
+  "notice": "Sample local operating model, not an approved staff establishment or exhaustive court directory. Provincial entries are civil geographic scopes, not asserted judicial administrative boundaries. Staff are fictional; reporting links and support workflow mappings require owner review.",
+  "sources": [
+    "https://www.jsc.org.zw/about/",
+    "https://www.jsc.org.zw/media/uploads/Miranda_June_2025.pdf"
+  ],
+  "provinces": [
+    "Harare",
+    "Bulawayo",
+    "Manicaland",
+    "Mashonaland Central",
+    "Mashonaland East",
+    "Mashonaland West",
+    "Masvingo",
+    "Matabeleland North",
+    "Matabeleland South",
+    "Midlands"
+  ],
+  "court_levels": [
+    "Secretariat",
+    "Constitutional Court",
+    "Supreme Court",
+    "High Court",
+    "Labour Court",
+    "Administrative Court",
+    "Magistrates Court"
+  ],
+  "stations": [
+    [
+      "JSC_SECRETARIAT",
+      "JSC Secretariat",
+      "Harare",
+      "Secretariat"
+    ],
+    [
+      "CONSTITUTIONAL_HARARE",
+      "Constitutional Court",
+      "Harare",
+      "Constitutional Court"
+    ],
+    [
+      "SUPREME_HARARE",
+      "Supreme Court",
+      "Harare",
+      "Supreme Court"
+    ],
+    [
+      "HIGH_HARARE",
+      "Harare High Court",
+      "Harare",
+      "High Court"
+    ],
+    [
+      "HIGH_BULAWAYO",
+      "Bulawayo High Court",
+      "Bulawayo",
+      "High Court"
+    ],
+    [
+      "HIGH_MUTARE",
+      "Mutare High Court",
+      "Manicaland",
+      "High Court"
+    ],
+    [
+      "HIGH_MASVINGO",
+      "Masvingo High Court",
+      "Masvingo",
+      "High Court"
+    ],
+    [
+      "LABOUR_HARARE",
+      "Harare Labour Court",
+      "Harare",
+      "Labour Court"
+    ],
+    [
+      "ADMIN_HARARE",
+      "Administrative Court",
+      "Harare",
+      "Administrative Court"
+    ],
+    [
+      "MAG_HARARE",
+      "Harare Magistrates Court",
+      "Harare",
+      "Magistrates Court"
+    ],
+    [
+      "MAG_BULAWAYO",
+      "Bulawayo Magistrates Court",
+      "Bulawayo",
+      "Magistrates Court"
+    ],
+    [
+      "MAG_MUTARE",
+      "Mutare Magistrates Court",
+      "Manicaland",
+      "Magistrates Court"
+    ],
+    [
+      "MAG_BINDURA",
+      "Bindura Magistrates Court",
+      "Mashonaland Central",
+      "Magistrates Court"
+    ],
+    [
+      "MAG_MARONDERA",
+      "Marondera Magistrates Court",
+      "Mashonaland East",
+      "Magistrates Court"
+    ],
+    [
+      "MAG_CHINHOYI",
+      "Chinhoyi Magistrates Court",
+      "Mashonaland West",
+      "Magistrates Court"
+    ],
+    [
+      "MAG_MASVINGO",
+      "Masvingo Magistrates Court",
+      "Masvingo",
+      "Magistrates Court"
+    ],
+    [
+      "MAG_HWANGE",
+      "Hwange Magistrates Court",
+      "Matabeleland North",
+      "Magistrates Court"
+    ],
+    [
+      "MAG_GWANDA",
+      "Gwanda Magistrates Court",
+      "Matabeleland South",
+      "Magistrates Court"
+    ],
+    [
+      "MAG_GWERU",
+      "Gweru Magistrates Court",
+      "Midlands",
+      "Magistrates Court"
+    ]
+  ],
+  "departments": [
+    [
+      "SECRETARIAT",
+      "Office of the Secretary",
+      null
+    ],
+    [
+      "SUPERIOR_REGISTRY",
+      "Superior Courts Registry",
+      "SECRETARIAT"
+    ],
+    [
+      "MAGISTRATES",
+      "Magistrates Courts Administration",
+      "SECRETARIAT"
+    ],
+    [
+      "ICT",
+      "Information and Communication Technology",
+      "SECRETARIAT"
+    ],
+    [
+      "HR",
+      "Human Resources",
+      "SECRETARIAT"
+    ],
+    [
+      "CORPORATE",
+      "Corporate Services",
+      "SECRETARIAT"
+    ],
+    [
+      "FINANCE",
+      "Finance and Accounts",
+      "SECRETARIAT"
+    ],
+    [
+      "ADMINISTRATION",
+      "Administration and Facilities",
+      "CORPORATE"
+    ],
+    [
+      "PROCUREMENT",
+      "Procurement Management",
+      "SECRETARIAT"
+    ],
+    [
+      "LEGAL",
+      "Legal Services",
+      "SECRETARIAT"
+    ],
+    [
+      "AUDIT",
+      "Internal Audit",
+      "SECRETARIAT"
+    ],
+    [
+      "SHERIFF",
+      "Sheriff Services",
+      "SECRETARIAT"
+    ],
+    [
+      "TRAINING",
+      "Training and Development",
+      "HR"
+    ],
+    [
+      "SECURITY",
+      "Court Security",
+      "CORPORATE"
+    ]
+  ],
+  "positions": [
+    [
+      "SECRETARY",
+      "Secretary",
+      null
+    ],
+    [
+      "DEPUTY_SECRETARY",
+      "Deputy Secretary",
+      "SECRETARY"
+    ],
+    [
+      "CHIEF_REGISTRAR",
+      "Chief Registrar",
+      "SECRETARY"
+    ],
+    [
+      "REGISTRAR",
+      "Registrar",
+      "CHIEF_REGISTRAR"
+    ],
+    [
+      "CHIEF_MAGISTRATE",
+      "Chief Magistrate",
+      "SECRETARY"
+    ],
+    [
+      "PROVINCIAL_MAGISTRATE",
+      "Provincial Magistrate",
+      "CHIEF_MAGISTRATE"
+    ],
+    [
+      "RESIDENT_MAGISTRATE",
+      "Resident Magistrate",
+      "PROVINCIAL_MAGISTRATE"
+    ],
+    [
+      "CLERK",
+      "Clerk of Court",
+      "RESIDENT_MAGISTRATE"
+    ],
+    [
+      "ICT_OFFICER",
+      "ICT Officer",
+      "DEPUTY_SECRETARY"
+    ],
+    [
+      "HR_OFFICER",
+      "Human Resources Officer",
+      "DEPUTY_SECRETARY"
+    ],
+    [
+      "ACCOUNTANT",
+      "Accountant",
+      "DEPUTY_SECRETARY"
+    ],
+    [
+      "PROCUREMENT_OFFICER",
+      "Procurement Officer",
+      "DEPUTY_SECRETARY"
+    ],
+    [
+      "ADMIN_OFFICER",
+      "Administration Officer",
+      "DEPUTY_SECRETARY"
+    ],
+    [
+      "LEGAL_OFFICER",
+      "Legal Officer",
+      "DEPUTY_SECRETARY"
+    ],
+    [
+      "AUDITOR",
+      "Internal Auditor",
+      "SECRETARY"
+    ],
+    [
+      "DEPUTY_SHERIFF",
+      "Deputy Sheriff",
+      "CHIEF_REGISTRAR"
+    ],
+    [
+      "TRAINING_OFFICER",
+      "Training Officer",
+      "DEPUTY_SECRETARY"
+    ],
+    [
+      "SECURITY_OFFICER",
+      "Security Officer",
+      "DEPUTY_SECRETARY"
+    ]
+  ],
+  "categories": [
+    [
+      "ICT_EQUIPMENT",
+      "Equipment and network support",
+      "ICT",
+      "ICT_OFFICER"
+    ],
+    [
+      "HR_LEAVE",
+      "Leave and personnel enquiries",
+      "HR",
+      "HR_OFFICER"
+    ],
+    [
+      "FINANCE_PAYMENT",
+      "Payment and reimbursement enquiries",
+      "FINANCE",
+      "ACCOUNTANT"
+    ],
+    [
+      "PROCUREMENT_REQUEST",
+      "Procurement requisitions",
+      "PROCUREMENT",
+      "PROCUREMENT_OFFICER"
+    ],
+    [
+      "FACILITIES",
+      "Court facilities and maintenance",
+      "ADMINISTRATION",
+      "ADMIN_OFFICER"
+    ],
+    [
+      "LEGAL_REVIEW",
+      "Administrative legal review",
+      "LEGAL",
+      "LEGAL_OFFICER"
+    ],
+    [
+      "TRAINING_REQUEST",
+      "Staff training requests",
+      "TRAINING",
+      "TRAINING_OFFICER"
+    ],
+    [
+      "SHERIFF_SERVICE",
+      "Sheriff service administration",
+      "SHERIFF",
+      "DEPUTY_SHERIFF"
+    ],
+    [
+      "SECURITY_REQUEST",
+      "Court security support",
+      "SECURITY",
+      "SECURITY_OFFICER"
+    ]
+  ]
+}

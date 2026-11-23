@@ -44,7 +44,7 @@ export class App {
   pages=[{id:'dashboard',name:'Overview',icon:'grid-1x2'},{id:'tickets',name:'My tickets',icon:'ticket-detailed'},
     {id:'tasks',name:'My actions',icon:'inbox'},{id:'shared',name:'Shared with me',icon:'people'},{id:'queues',name:'Work queues',icon:'collection'},{id:'sla',name:'SLA monitor',icon:'alarm'},{id:'workflows',name:'Workflows',icon:'diagram-3'},
     {id:'reports',name:'Reports',icon:'file-earmark-bar-graph'},{id:'directory',name:'Administration',icon:'building'},{id:'notifications',name:'Notifications',icon:'bell'},{id:'preferences',name:'Preferences',icon:'sliders'}];
-  resources=['provinces','stations','departments','positions','users','assignments','categories','user-roles','scope-grants','roles','permissions','audit'];
+  resources=['court-levels','provinces','stations','departments','positions','users','assignments','categories','user-roles','scope-grants','roles','permissions','audit'];
   wizardSteps=['Basics','Form','Routing','Stages','Policies','Simulation','Review'];
   nodeTypes=['task','claim_pool','approval','decision','route','parallel_fork','parallel_join','request_info','timer','escalation','notification','webhook','resolve','close','end'];
   constructor(){try{const p=JSON.parse(localStorage.getItem('jsc-preferences')??'{}');this.help=p.help??true;this.timezone=p.timezone??'Africa/Harare';}catch{} }
@@ -52,7 +52,7 @@ export class App {
   can(permission:string):boolean{return !!this.user?.permissions?.includes(permission);}
   visiblePage(id:string):boolean{if(['queues','sla'].includes(id))return this.can('task.manage');return id!=='workflows'&&id!=='directory'||id==='workflows'&&(this.can('workflow.design')||this.can('workflow.publish'))||id==='directory'&&(this.can('directory.manage')||this.can('security.manage'));}
   title(id=this.page):string{return this.pages.find(p=>p.id===id)?.name??(id==='summary'?'Shared summary':'Ticket detail');}
-  label(key:string):string{return key.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());}
+  label(key:string):string{if(key==='court-levels')return 'Court levels';return key.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());}
   date(value:any):string{if(!value)return '—';try{return new Intl.DateTimeFormat('en-ZW',{dateStyle:'medium',timeStyle:'short',timeZone:this.timezone}).format(new Date(value));}catch{return String(value);}}
   entries(object:any):[string,any][]{return Object.entries(object??{});}
   display(row:any):string{return row?.name??row?.display_name??row?.title??row?.code??row?.event_type??row?.id??'';}
@@ -175,7 +175,7 @@ export class App {
     this.draft={...data,reason:''};this.references={};this.refQueries={};this.refNext={};this.showModal();
     for(const field of this.recordFields){if(this.referenceResource(field.key))await this.loadReference(field.key);}
   }
-  referenceResource(key:string):string|null{return ({province_id:'provinces',station_id:'stations',department_id:'departments',position_id:'positions',user_id:'users',role_id:'roles',parent_id:'categories',category_id:'categories',permission_code:'permissions'}as any)[key]??(key==='scope_ref_id'?({station:'stations',province:'provinces',department:'departments'}as any)[this.draft.scope_kind]??null:null);}
+  referenceResource(key:string):string|null{return ({court_level_id:'court-levels',reports_to_position_id:'positions',province_id:'provinces',station_id:'stations',department_id:'departments',position_id:'positions',user_id:'users',role_id:'roles',parent_id:this.resource==='departments'?'departments':'categories',category_id:'categories',permission_code:'permissions'}as any)[key]??(key==='scope_ref_id'?({station:'stations',province:'provinces',department:'departments'}as any)[this.draft.scope_kind]??null:null);}
   async loadReference(key:string,more=false):Promise<void>{const resource=this.referenceResource(key);if(!resource)return;try{const q:any={q:this.refQueries[key]??''};if(more&&this.refNext[key])q.after=this.refNext[key];const r=await this.api.get('/admin/'+resource,q);this.references[key]=await this.preserveChoice('/admin/'+resource,more?[...(this.references[key]??[]),...r.data]:r.data,this.draft[key],key==='permission_code'?'code':'id');this.refNext[key]=r.meta.next_after??null;}catch(e){this.failed(e);}}
   async saveRecord():Promise<void>{if((this.draft.id&&this.draft.active===false||['scope-grants','user-roles'].includes(this.resource))&&!(await this.alert({title:'Apply this authority or lifecycle change?',text:'The change takes effect immediately and is added to the audit history.',showCancelButton:true,confirmButtonText:'Apply change',icon:'warning'})).isConfirmed)return;this.busy=true;this.remember();try{
     const body:any={reason:this.draft.reason};for(const field of this.recordFields){let value=this.draft[field.key];if(field.type.startsWith('nullable_')&&(value===''||value===undefined))value=null;if(field.type.includes('date')&&value)value=new Date(value).toISOString();body[field.key]=value;}

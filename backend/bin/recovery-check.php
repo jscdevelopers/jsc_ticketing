@@ -7,9 +7,9 @@ try{
     (new App\Config\Migrator($db,dirname(__DIR__).'/database'))->run();
     $requester=App\Support\Sql::run($db,"SELECT u.id,a.id AS assignment_id FROM app_users u JOIN staff_assignments a ON a.user_id=u.id WHERE u.external_subject='local-demo:requester.demo' AND u.active AND a.begins_at<=now() AND (a.ends_at IS NULL OR a.ends_at>now()) LIMIT 1")->fetch();
     if(!$requester){throw new RuntimeException('Seed a local demo before exercising operational recovery.');}
-    $categories=(new App\Tickets\IntakeCatalog($db))->listing($requester['id'],['q'=>'Demo equipment support'],false)['data'];
+    $catalog=new App\Tickets\IntakeCatalog($db);$categories=$catalog->listing($requester['id'],['q'=>'Equipment and network support'],false)['data'];$jsc=(bool)$categories;if(!$categories)$categories=$catalog->listing($requester['id'],['q'=>'Demo equipment support'],false)['data'];
     if(count($categories)!==1){throw new RuntimeException('A published demo workflow is required.');}
-    $ticket=(new App\Tickets\TicketSubmission($db))->submit($requester['id'],['assignment_id'=>$requester['assignment_id'],'category_id'=>$categories[0]['id'],'subject'=>'Disposable recovery probe','description'=>'Created only in the restored test database.','fields'=>['asset_tag'=>'RECOVERY-TEST']],bin2hex(random_bytes(12)),'recovery-probe')['ticket'];
+    $ticket=(new App\Tickets\TicketSubmission($db))->submit($requester['id'],['assignment_id'=>$requester['assignment_id'],'category_id'=>$categories[0]['id'],'subject'=>'Disposable recovery probe','description'=>'Created only in the restored test database.','fields'=>[$jsc?'service_reference':'asset_tag'=>'RECOVERY-TEST']],bin2hex(random_bytes(12)),'recovery-probe')['ticket'];
     (new App\Tickets\TicketReader($db))->detail($requester['id'],$ticket['id']);
     $agent=App\Support\Sql::run($db,"SELECT id FROM app_users WHERE external_subject='local-demo:agent.demo'")->fetchColumn();
     $task=App\Support\Sql::run($db,'SELECT id,version FROM task_instances WHERE ticket_id=?',[$ticket['id']])->fetch();
