@@ -34,6 +34,22 @@ final class Graph
                 if (!TicketReader::uuid($config['department_id']??'') || (in_array($node['type'],['task','claim_pool','approval'],true) && !TicketReader::uuid($config['position_id']??''))) { throw new InvalidArgumentException('Routing/task nodes require directory UUIDs.'); }
                 if (!in_array($config['scope']??'station',['station','province','department','national'],true)) { throw new InvalidArgumentException('Invalid task geography.'); }
             }
+            foreach(['position_ids','user_ids']as$field){if(isset($config[$field])&&(!is_array($config[$field])||!array_is_list($config[$field])||count($config[$field])>50||array_filter($config[$field],static fn($id)=>!is_string($id)||!TicketReader::uuid($id))))throw new InvalidArgumentException('Stage people and positions must be lists of at most 50 UUIDs.');}
+            if(isset($config['audience_mode'])&&!in_array($config['audience_mode'],['both','people','positions'],true))throw new InvalidArgumentException('Invalid stage audience mode.');
+            if(($config['audience_mode']??'')==='people'&&empty($config['user_ids']))throw new InvalidArgumentException('Choose staff for a people-only stage.');
+            if(isset($config['assignment_mode'])&&!in_array($config['assignment_mode'],['pool','automatic'],true))throw new InvalidArgumentException('Invalid assignment mode.');
+            if(isset($config['intervention_rules'])){
+                if(!is_array($config['intervention_rules'])||!array_is_list($config['intervention_rules'])||count($config['intervention_rules'])>20)throw new InvalidArgumentException('At most 20 intervention audiences are supported.');
+                foreach($config['intervention_rules']as$rule){if(!is_array($rule)||array_diff(array_keys($rule),['position_ids','user_ids','scope'])||!in_array($rule['scope']??'',['station','province','department','national'],true))throw new InvalidArgumentException('Invalid intervention scope.');
+                    foreach(['position_ids','user_ids']as$field){if(!is_array($rule[$field]??[])||!array_is_list($rule[$field]??[])||count($rule[$field]??[])>50||array_filter($rule[$field]??[],static fn($id)=>!is_string($id)||!TicketReader::uuid($id)))throw new InvalidArgumentException('Invalid intervention audience.');}
+                    if(empty($rule['position_ids'])&&empty($rule['user_ids']))throw new InvalidArgumentException('Choose at least one intervention position or person.');
+                }
+            }
+            if(isset($config['redirect_targets'])&&(!is_array($config['redirect_targets'])||!array_is_list($config['redirect_targets'])||count($config['redirect_targets'])>50||array_filter($config['redirect_targets'],static fn($id)=>!is_string($id)||!preg_match('/^[a-z][a-z0-9_]{0,49}$/D',$id))))throw new InvalidArgumentException('Redirect destinations must be a bounded list of stage IDs.');
+            if(isset($config['escalate_to'])&&(!is_string($config['escalate_to'])||!preg_match('/^[a-z][a-z0-9_]{0,49}$/D',$config['escalate_to'])))throw new InvalidArgumentException('Invalid escalation destination.');
+            if(isset($config['redirect_only'])&&(!is_bool($config['redirect_only'])||($config['redirect_only']&&empty($config['redirect_targets']))))throw new InvalidArgumentException('Manual dispatch requires destination choices.');
+            if(isset($config['complete_label'])&&(!is_string($config['complete_label'])||strlen($config['complete_label'])<1||strlen($config['complete_label'])>80))throw new InvalidArgumentException('Invalid completion action label.');
+            if(isset($node['layout'])&&(!is_array($node['layout'])||array_diff(array_keys($node['layout']),['x','y'])||!isset($node['layout']['x'],$node['layout']['y'])||array_filter($node['layout'],static fn($value)=>!is_numeric($value)||!is_finite((float)$value)||$value<0||$value>20000)))throw new InvalidArgumentException('Invalid canvas coordinates.');
             foreach(['sla_minutes','delay_minutes'] as $field) { if(isset($config[$field]) && (!is_int($config[$field]) || $config[$field]<1 || $config[$field]>525600)) { throw new InvalidArgumentException('Invalid timer/SLA duration.'); } }
             if($node['type']==='timer' && !isset($config['delay_minutes'])) { throw new InvalidArgumentException('Timer duration required.'); }
             $this->nodes[$node['id']]=$node;
@@ -50,6 +66,8 @@ final class Graph
         }
         foreach($this->nodes as $id=>$node) {
             $edges=$this->edges[$id]??[];
+            foreach([...(isset($node['config']['escalate_to'])?[$node['config']['escalate_to']]:[]),...($node['config']['redirect_targets']??[])]as$target){if(!is_string($target)||!in_array($target,array_column($edges,'to'),true))throw new InvalidArgumentException('Escalation and redirect destinations need a visible outgoing connection.');}
+
             if($node['type']==='approval'&&isset($node['config']['on_reject'])&&(!in_array($node['config']['on_reject'],['terminate','route'],true)||$node['config']['on_reject']==='route'&&count($edges)<2)){throw new InvalidArgumentException('Routed rejection requires explicit conditional outcome paths.');}
             if(in_array($node['type'],['close','end'],true)) { if($edges) {throw new InvalidArgumentException('Terminal nodes cannot have outgoing edges.');} continue; }
             if(!$edges) {throw new InvalidArgumentException('Every nonterminal must have an exit.');}

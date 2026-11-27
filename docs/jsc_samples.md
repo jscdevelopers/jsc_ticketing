@@ -41,3 +41,7 @@ Support workflows cover ICT, HR, Finance, Procurement, Facilities, Legal Service
 Passwords are in ignored `secrets/<environment>/jsc_passwords.json`. Development and offline passwords remain separate. The five previous `*.demo` usernames are renamed in place; their password hashes and password-change state are preserved. Existing initial passwords are copied to the new credential file under the renamed keys, and newly created accounts receive private random temporary passwords. If a user previously changed their password, the file still contains only their initial value; use their chosen password. The existing administrator is unchanged.
 
 The old credential file is preserved as historical local material; its old usernames are no longer valid after conversion. Repeat installation does not reset credentials, duplicate samples, or overwrite subsequent operational changes. A failed sample-request stage can be retried after fixing the reported constraint. Setup is rejected outside explicitly enabled local/test environments. No credentials are committed to Git.
+
+## IT escalation and executive oversight
+
+The additional [IT workflow operating guide](it_workflow.md) documents automatic station assignment, provincial escalation, help-desk category dispatch, four specialist paths, senior intervention and 18 analytics charts. Run `scripts/setup-it-workflow.ps1` after the JSC structure to add its 38 role accounts and nine worked requests. Its separate initial credentials remain private in `secrets/<environment>/it_passwords.json`.

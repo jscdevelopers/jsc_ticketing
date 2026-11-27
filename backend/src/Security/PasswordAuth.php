@@ -39,10 +39,14 @@ final class PasswordAuth
         $hash=$credential['password_hash']??'$2y$12$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2uheWG/igi.';
         $verified=password_verify($body['password'],$hash);
         if(!$credential||!$credential['active']||!$verified){throw new ApiException(401,'invalid_credentials','Username or password is incorrect.');}
+        // Reserve before expensive verification, then refund valid primary credentials.
+        // Successful staff sign-ins must not exhaust a shared workstation/proxy's failure budget.
+        foreach(['ip:'.hash('sha256',$ip),'user:'.hash('sha256',$username)]as$bucket){Sql::run($this->db,'UPDATE login_rate_limits SET attempts=GREATEST(0,attempts-1) WHERE bucket=?',[$bucket]);}
         $mode=getenv('AUTH_MODE')?:'password';
         if((getenv('APP_ENV')?:'')==='production'&&$mode!=='nauth'){throw new ApiException(503,'identity_unavailable','Production requires the approved identity verification adapter.');}
         if(!in_array($mode,['password','nauth'],true)){throw new ApiException(503,'identity_unavailable','Unsupported identity mode.');}
         if($mode==='password'){return$this->issue($credential['user_id'],$credential['password_changed_at']);}
+        $this->throttle('mfa-start-ip:'.hash('sha256',$ip),60);$this->throttle('mfa-start-user:'.hash('sha256',$username),8);
         $client=$this->client();$status=$client->checkUser($credential['external_subject'],$username);
         if(($status['ok']??false)!==true||($status['data']['authentication_allowed']??false)!==true){throw new ApiException(403,'mfa_unavailable','Central identity verification denied sign-in. Contact your administrator.');}
         $biometric=($status['data']['biometric_available']??false)===true||($status['data']['biometric_required']??false)===true;

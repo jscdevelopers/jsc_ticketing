@@ -36,6 +36,12 @@ try{
     for($i=0;$i<8;$i++){try{$passwordAuth->login(['username'=>'unknown.test','password'=>'incorrect-password'],'rate-test-ip');}catch(App\Http\ApiException){}}
     try{$passwordAuth->login(['username'=>'unknown.test','password'=>'incorrect-password'],'rate-test-ip');expect(false,'login rate limit must trigger');}
     catch(App\Http\ApiException$error){expect($error->status===429,'per-account login throttling enforced');}
+    $loginLimited=(new App\Http\Application($db))->handle(new App\Http\Request('POST','/api/v1/auth/login',[],['Content-Type'=>'application/json'],['username'=>'unknown.test','password'=>'incorrect-password'],[]));expect($loginLimited->status===429&&$loginLimited->headers['Retry-After']==='900','login throttling advertises its fifteen-minute retry window');
+    for($i=0;$i<35;$i++){$success=$passwordAuth->login(['username'=>'workflow.requester','password'=>$newPassword],'shared-success-ip');sql('UPDATE api_tokens SET revoked_at=now() WHERE token_hash=?',[hash('sha256',$success['token'])]);}
+    expect((int)sql('SELECT attempts FROM login_rate_limits WHERE bucket=?',['ip:'.hash('sha256','shared-success-ip')])->fetchColumn()===0,'35 valid staff sign-ins do not exhaust a shared IP failure budget');
+    expect((int)sql('SELECT attempts FROM login_rate_limits WHERE bucket=?',['user:'.hash('sha256','workflow.requester')])->fetchColumn()===1,'successful sign-ins preserve previous failures rather than erasing them');
+    for($i=0;$i<30;$i++){try{$passwordAuth->login(['username'=>'shared.failure.'.$i,'password'=>'incorrect-password'],'shared-failure-ip');expect(false,'invalid credentials must reject');}catch(App\Http\ApiException$error){expect($error->status===401,'distinct failed usernames consume the shared IP budget');}}
+    try{$passwordAuth->login(['username'=>'shared.failure.next','password'=>'incorrect-password'],'shared-failure-ip');expect(false,'shared IP failure budget must remain enforced');}catch(App\Http\ApiException$error){expect($error->status===429,'shared IP remains throttled after thirty failed password attempts');}
 
     // Inject only the provider boundary. Primary password and challenge storage remain real.
     putenv('AUTH_MODE=nauth');$factor=new class {
@@ -52,6 +58,8 @@ try{
     expect(callApi('/me',$mfaSession['token'])->status===200,'approved provider factor completes sign-in');
     try{$mfa->verify(['challenge'=>$challenge['challenge'],'code'=>'000000'],'mfa-test-ip');expect(false,'consumed MFA challenge cannot replay');}
     catch(App\Http\ApiException$error){expect($error->status===401,'MFA challenge consumption is one-use');}
+    for($i=0;$i<7;$i++){$mfa->login(['username'=>'workflow.requester','password'=>$newPassword],'mfa-test-ip');}
+    try{$mfa->login(['username'=>'workflow.requester','password'=>$newPassword],'mfa-test-ip');expect(false,'MFA starts must have their own budget');}catch(App\Http\ApiException$error){expect($error->status===429,'valid primary passwords cannot cause unlimited MFA challenges');}
 }finally{if($oldAuthMode===false){putenv('AUTH_MODE');}else{putenv('AUTH_MODE='.$oldAuthMode);}if($oldAppEnv===false){putenv('APP_ENV');}else{putenv('APP_ENV='.$oldAppEnv);}}
 
 // Request-information -> reply -> timer -> claim task, driven by the same runtime.

@@ -24,7 +24,7 @@ seedSql("INSERT INTO scope_grants(user_id,permission_code,scope_kind,scope_ref_i
 $provisioner->grantRead(uid(13),'station',uid(2),'QA scoped manager');
 seedSql("INSERT INTO user_roles(user_id,role_id) SELECT ?,id FROM roles WHERE code='operations_admin'",[uid(13)]);
 seedSql("INSERT INTO user_roles(user_id,role_id) SELECT ?,id FROM roles WHERE code='sensitive_reader'",[uid(13)]);
-foreach(['task.manage','ticket.manage','ticket.share','ticket.privacy','ticket.read_sensitive','report.export']as$permission){seedSql("INSERT INTO scope_grants(user_id,permission_code,scope_kind,scope_ref_id,grant_reason) VALUES (?,?,'station',?,'QA scoped manager')",[uid(13),$permission,uid(2)]);}
+foreach(['task.manage','ticket.manage','ticket.share','ticket.privacy','ticket.read_sensitive','report.export','report.analytics']as$permission){seedSql("INSERT INTO scope_grants(user_id,permission_code,scope_kind,scope_ref_id,grant_reason) VALUES (?,?,'station',?,'QA scoped manager')",[uid(13),$permission,uid(2)]);}
 seedSql("INSERT INTO user_roles(user_id,role_id) SELECT ?,id FROM roles WHERE code='ticket_observer'",[uid(14)]);
 $schema=['type'=>'object','additionalProperties'=>false,'required'=>['asset_tag'],'properties'=>['asset_tag'=>['type'=>'string','title'=>'Asset tag','minLength'=>2,'maxLength'=>30]]];
 (new App\Tickets\CatalogConfigurator($db))->configure(['category_id'=>uid(20),'department_id'=>uid(3),'code'=>'EQUIPMENT','name'=>'QA Equipment','form_schema'=>$schema],'QA initial category');
@@ -33,3 +33,10 @@ $definition=['engine'=>'workflow-v1','department_id'=>uid(3),'category_code'=>'E
     'edges'=>[['from'=>'start','to'=>'work'],['from'=>'work','to'=>'end']]];
 $service=new App\Workflow\WorkflowService($db);$draft=$service->save(uid(10),null,0,'qa-draft',['category_id'=>uid(20),'definition'=>$definition])['data'];$service->publish(uid(10),$draft['id'],1,'qa-publish','QA approved isolated fixture');
 echo "Isolated UI fixtures created.\n";
+
+$itPositions=['it_officer'=>uid(4)];$itNames=['principal_it'=>'qa.principal','principal_help_desk'=>'qa.helpdesk','head_it'=>'qa.ithead','deputy_it'=>'qa.itdeputy','systems_engineer'=>'qa.systems_engineer','systems_analyst'=>'qa.systems_analyst','hardware_specialist'=>'qa.hardware','database_specialist'=>'qa.database'];
+$itNumber=300;
+foreach($itNames as$key=>$username){$itNumber++;$itPositions[$key]=uid($itNumber);seedSql('INSERT INTO positions(id,code,title) VALUES (?,?,?)',[uid($itNumber),'QA_'.strtoupper($key),ucwords(str_replace('_',' ',$key))]);$user=uid($itNumber+100);seedSql('INSERT INTO app_users(id,external_subject,display_name) VALUES (?,?,?)',[$user,'qa:'.$username,$username]);seedSql('INSERT INTO user_credentials(user_id,username,password_hash,must_change) VALUES (?,?,?,false)',[$user,$username,$hash]);seedSql('INSERT INTO staff_assignments(user_id,position_id,department_id,station_id,begins_at) VALUES (?,?,?,?,now())',[$user,$itPositions[$key],uid(3),uid(2)]);foreach(['operations_admin','ticket_reader']as$role)seedSql('INSERT INTO user_roles(user_id,role_id) SELECT ?,id FROM roles WHERE code=?',[$user,$role]);foreach(['task.claim','task.intervene','ticket.read','ticket.comment','ticket.comment_closed','report.analytics']as$permission)seedSql("INSERT INTO scope_grants(user_id,permission_code,scope_kind,scope_ref_id,grant_reason) VALUES (?,?,'department',?,'QA IT routing authority')",[$user,$permission,uid(3)]);}
+seedSql("INSERT INTO categories(id,department_id,code,name) VALUES (?,?,'QA_IT','QA Computer faults')",[uid(500),uid(3)]);
+$itDefinition=App\Workflow\ItWorkflow::definition(uid(3),$itPositions);$itDefinition['require_second_approver']=false;
+$itDraft=$service->save(uid(10),null,0,'qa-it-draft',['category_id'=>uid(500),'definition'=>$itDefinition])['data'];$service->publish(uid(10),$itDraft['id'],1,'qa-it-publish','QA approved IT escalation fixture');

@@ -21,6 +21,17 @@ final class Runtime
 
     public function start():void { $this->enter($this->graph->start,[]);$this->refresh(); }
 
+    public function routeAction(array$execution,string$action,mixed$target,string$reason):void
+    {
+        $config=$this->graph->nodes[$execution['node_id']]['config']??[];
+        if($action==='escalate'){$target=$config['escalate_to']??null;}
+        elseif(!is_string($target)||!in_array($target,$config['redirect_targets']??[],true)){throw new \App\Http\ApiException(422,'invalid_redirect','Choose an approved destination stage.');}
+        if(!is_string($target)||!isset($this->graph->nodes[$target])||!in_array($target,array_column($this->graph->edges[$execution['node_id']]??[],'to'),true)){throw new \App\Http\ApiException(422,'route_unavailable','This stage has no approved route for that action.');}
+        Sql::run($this->db,"UPDATE workflow_executions SET status='completed',outcome=?,completed_at=now() WHERE id=?",[$action,$execution['id']]);
+        Events::record($this->db,$this->ticket,null,$this->actor,$action==='escalate'?'WORKFLOW_ESCALATED':'WORKFLOW_REDIRECTED',null,null,['from_node'=>$execution['node_id'],'to_node'=>$target],$reason,$this->requestId);
+        $this->enter($target,json_decode($execution['context'],true,64,JSON_THROW_ON_ERROR));$this->refresh();
+    }
+
     public function sendBack(array$execution,string$reason):void
     {
         $config=$this->graph->nodes[$execution['node_id']]['config']??[];
@@ -57,9 +68,9 @@ final class Runtime
             VALUES (?,?,?,?,'active',CAST(? AS jsonb),?) RETURNING *",[$this->ticket['id'],$nodeId,$type,$node['label'],json_encode($context,JSON_THROW_ON_ERROR),$this->ticket['run_number']])->fetch();
         if(in_array($type,['task','claim_pool','approval'],true)) {
             $due=isset($config['sla_minutes'])?BusinessClock::due(new DateTimeImmutable(),$config['sla_minutes'],$this->graph->definition['calendar']??[])->format(DATE_ATOM):null;
-            $task=Sql::run($this->db,"INSERT INTO task_instances(ticket_id,workflow_version_id,node_id,branch_id,assigned_department_id,assigned_position_id,scope_kind,execution_id,due_at)
-                VALUES (?,?,?,?,?,?,?,?,?) RETURNING *",[$this->ticket['id'],$this->ticket['workflow_version_id'],$nodeId,$context?end($context)['branch_id']:null,
-                $config['department_id'],$config['position_id'],$config['scope']??'station',$execution['id'],$due])->fetch();
+            $task=Sql::run($this->db,"INSERT INTO task_instances(ticket_id,workflow_version_id,node_id,branch_id,assigned_department_id,assigned_position_id,scope_kind,execution_id,due_at,routing_policy)
+                VALUES (?,?,?,?,?,?,?,?,?,CAST(? AS jsonb)) RETURNING *",[$this->ticket['id'],$this->ticket['workflow_version_id'],$nodeId,$context?end($context)['branch_id']:null,
+                $config['department_id'],$config['position_id'],$config['scope']??'station',$execution['id'],$due,json_encode($config,JSON_THROW_ON_ERROR)])->fetch();
             $candidates=Sql::run($this->db,'SELECT actor.id FROM app_users actor JOIN task_instances ti ON ti.id=CAST(? AS uuid) JOIN tickets t ON t.id=ti.ticket_id
                 WHERE actor.active AND '.TaskAccess::eligibilitySql().' ORDER BY actor.id LIMIT 1001',[$task['id']])->fetchAll(PDO::FETCH_COLUMN);
             $overflow=count($candidates)>1000;if($overflow){$candidates=[];}
@@ -69,6 +80,11 @@ final class Runtime
             }
             Events::record($this->db,$this->ticket,$task['id'],$this->actor,$candidates?'TASK_OFFERED':'NO_ELIGIBLE_CANDIDATES',null,$candidates?'offered':'blocked',
                 ['node_id'=>$nodeId,'candidate_count'=>count($candidates)],null,$this->requestId,$candidates);
+            if(($config['assignment_mode']??'pool')==='automatic'&&!$overflow){
+                $primaryCandidates=Sql::run($this->db,'SELECT actor.id FROM app_users actor JOIN task_instances ti ON ti.id=CAST(? AS uuid) JOIN tickets t ON t.id=ti.ticket_id WHERE actor.active AND '.TaskAccess::eligibilitySql('primary')." ORDER BY (SELECT count(*) FROM task_instances load WHERE load.claimed_by=actor.id AND load.status IN ('claimed','in_progress')),actor.id LIMIT 1000",[$task['id']])->fetchAll(PDO::FETCH_COLUMN);
+                $primary=null;foreach($primaryCandidates as$candidate){try{(new self($this->db,$this->ticket['id'],$candidate,$this->requestId))->assertSeparation($execution);$primary=$candidate;break;}catch(\App\Http\ApiException$error){if($error->status!==403)throw$error;}}
+                if($primary){Sql::run($this->db,"UPDATE task_instances SET status='claimed',claimed_by=?,claimed_at=now(),version=version+1 WHERE id=?",[$primary,$task['id']]);Events::record($this->db,$this->ticket,$task['id'],$this->actor,'TASK_AUTO_ASSIGNED','offered','claimed',['assigned_user_id'=>$primary],null,$this->requestId,[$primary]);}
+            }
             return;
         }
         if($type==='request_info' || $type==='timer') {

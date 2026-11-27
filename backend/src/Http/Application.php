@@ -85,6 +85,7 @@ final class Application
             $router->post('/admin/users/{id}/password',function(Request$r):Response{
                 $this->jsonBody($r);return Response::json((new Administration($this->db()))->password($r->user['id'],$r->params['id'],$this->expectedVersion($r),$r->header('Idempotency-Key')??'',$r->body));
             })->middleware($secure);
+            $router->get('/analytics',fn(Request$r)=>Response::json((new \App\Tickets\Analytics($this->db()))->dashboard($r->user['id'],$r->query)))->middleware($secure);
             $router->get('/dashboard',fn(Request $r)=>Response::json((new Reporting($this->db()))->dashboard($r->user['id'],$r->query)))->middleware($secure);
             $router->get('/notifications',fn(Request $r)=>Response::json((new Reporting($this->db()))->notifications($r->user['id'],$r->query)))->middleware($secure);
             $router->get('/shared',fn(Request$r)=>Response::json((new Participants($this->db()))->shared($r->user['id'],$r->query)))->middleware($secure);
@@ -114,6 +115,8 @@ final class Application
             foreach(['recompute','reassign','manage-release','pause-sla','resume-sla']as$managementAction){$router->post('/tasks/{id}/'.$managementAction,function(Request$r)use($managementAction,$requestId):Response{
                 $this->jsonBody($r);return Response::json((new TaskManagement($this->db()))->action($r->user['id'],$r->params['id'],$managementAction,$this->expectedVersion($r),$r->header('Idempotency-Key')??'',$r->body,$requestId));
             })->middleware($secure);}
+            $router->get('/tickets/{id}/flow',fn(Request$r)=>Response::json((new Collaboration($this->db()))->flow($r->user['id'],$r->params['id'])))->middleware($secure);
+            $router->get('/tickets/{id}/comment-recipients',fn(Request$r)=>Response::json((new Collaboration($this->db()))->recipients($r->user['id'],$r->params['id'],$r->query)))->middleware($secure);
             $router->get('/tickets/{id}/comments',fn(Request $r)=>Response::json((new Collaboration($this->db()))->comments($r->user['id'],$r->params['id'],$r->query)))->middleware($secure);
             foreach(['comments','reply']as$collaborationAction){
                 $router->post('/tickets/{id}/'.$collaborationAction,function(Request $r)use($collaborationAction,$requestId):Response{
@@ -122,7 +125,7 @@ final class Application
             }
             $router->get('/tasks',fn(Request $r)=>Response::json((new TaskService($this->db()))->listing($r->user['id'],$r->query)))->middleware($secure);
             $router->get('/tickets/{id}/tasks',fn(Request $r)=>Response::json((new TaskService($this->db()))->listing($r->user['id'],$r->query,$r->params['id'])))->middleware($secure);
-            foreach(['claim','release','complete','approve','reject','send-back']as$taskAction){
+            foreach(['claim','release','complete','approve','reject','send-back','escalate','redirect','take-over']as$taskAction){
                 $router->post('/tasks/{id}/'.$taskAction,function(Request $r)use($taskAction,$requestId):Response{
                     $this->jsonBody($r);
                     return Response::json((new TaskService($this->db()))->action($r->user['id'],$r->params['id'],$taskAction,$this->expectedVersion($r),$r->header('Idempotency-Key')??'',$r->body,$requestId));
@@ -197,7 +200,7 @@ final class Application
             $response->headers['WWW-Authenticate'] = 'Bearer';
         }
         if ($response->status === 429) {
-            $response->headers['Retry-After'] = '3600';
+            $response->headers['Retry-After'] = str_contains($request->path,'/auth/')?'900':'3600';
         }
         if ($request->method === 'HEAD') {
             $response->body = '';

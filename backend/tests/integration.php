@@ -274,6 +274,7 @@ try {
     require __DIR__ . '/local-webhook.php';
     require __DIR__ . '/local-demo.php';
     require __DIR__ . '/jsc-samples.php';
+    require __DIR__ . '/it-routing.php';
     echo "PASS: $checks PostgreSQL integration and HTTP checks.\n";
 } finally {
     if (is_resource($server)) {

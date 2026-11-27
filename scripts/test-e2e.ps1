@@ -33,7 +33,9 @@ try{
     $httpReady=$false;for($i=0;$i -lt 30;$i++){try{$response=Invoke-RestMethod "$env:E2E_BASE_URL/api/v1/health/ready";if($response.data.ready){$httpReady=$true;break}}catch{};Start-Sleep -Milliseconds 500};if(!$httpReady){throw 'UI HTTP readiness failed.'}
     Push-Location (Join-Path $workspace 'frontend');try{npm.cmd run test:e2e;if($LASTEXITCODE -ne 0){throw 'Browser acceptance checks failed.'}}finally{Pop-Location}
 }finally{
-    docker rm -f "$testId-web" "$testId-worker" "$testId-api" "$testId-db" *> $null
+    if($testId -notmatch '^jsc-ticketing-e2e-[a-f0-9]{12}$'){throw 'Unexpected UI test resource name; refusing cleanup.'}
+    $existingContainers=@(docker ps -aq --filter "name=^/${testId}-(web|worker|api|db)$")
+    if($existingContainers.Count){docker rm -f @existingContainers *> $null}
     if($volumeCreated){docker volume rm "$testId-files" *> $null}
     if($networkCreated){docker network rm $testId *> $null}
     $env:E2E_BASE_URL=$savedBase;$env:E2E_PASSWORD=$savedPassword

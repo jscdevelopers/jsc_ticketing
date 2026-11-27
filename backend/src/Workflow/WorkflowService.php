@@ -36,9 +36,9 @@ final class WorkflowService
 
     public function choices(string $actor,string $resource,array $query):array
     {
-        if(!in_array($resource,['categories','departments','positions','stations','provinces'],true)||array_diff(array_keys($query),['q','after','id'])||array_filter($query,static fn($v)=>!is_string($v))||(isset($query['id'])&&!TicketReader::uuid($query['id']))||strlen($query['q']??'')>200||(isset($query['after'])&&!TicketReader::uuid($query['after']))){throw new ApiException(422,'invalid_filter','Invalid workflow choice filter.');}
-        $label=$resource==='positions'?'title':'name';
-        $sql="SELECT c.* FROM $resource c JOIN app_users actor ON actor.id=CAST(:actor AS uuid) WHERE actor.active AND c.active AND ".self::viewSql($resource==='categories'?'c.department_id':null);
+        if(!in_array($resource,['categories','departments','positions','stations','provinces','users'],true)||array_diff(array_keys($query),['q','after','id'])||array_filter($query,static fn($v)=>!is_string($v))||(isset($query['id'])&&!TicketReader::uuid($query['id']))||strlen($query['q']??'')>200||(isset($query['after'])&&!TicketReader::uuid($query['after']))){throw new ApiException(422,'invalid_filter','Invalid workflow choice filter.');}
+        $label=$resource==='users'?'display_name':($resource==='positions'?'title':'name');$table=$resource==='users'?'app_users':$resource;
+        $sql="SELECT c.* FROM $table c JOIN app_users actor ON actor.id=CAST(:actor AS uuid) WHERE actor.active AND c.active AND ".self::viewSql($resource==='categories'?'c.department_id':null);
         $params=['actor'=>$actor];if(isset($query['id'])){$sql.=' AND c.id=CAST(:choice_id AS uuid)';$params['choice_id']=$query['id'];}if(isset($query['after'])){$sql.=' AND c.id>CAST(:after AS uuid)';$params['after']=$query['after'];}
         if(($query['q']??'')!==''){$sql.=" AND c.$label ILIKE :q ESCAPE '!'";$params['q']='%'.str_replace(['!','%','_'],['!!','!%','!_'],$query['q']).'%';}
         $rows=Sql::run($this->db,$sql.' ORDER BY c.id LIMIT 11',$params)->fetchAll();$more=count($rows)>10;if($more){array_pop($rows);}$last=end($rows);return['data'=>$rows,'meta'=>['next_after'=>$more?$last['id']:null]];
@@ -109,7 +109,7 @@ final class WorkflowService
             try{$graph=new Graph($definition);$this->validateDirectory($graph);BusinessClock::due(new \DateTimeImmutable(),1,$definition['calendar']??[]);}
             catch(\InvalidArgumentException $error){throw new ApiException(422,'invalid_workflow',$error->getMessage());}
             if($definition['department_id']!==$category['department_id']){throw new ApiException(422,'invalid_workflow','Workflow owner must match category owner.');}
-            $national=(bool)array_filter($graph->nodes,static fn($node)=>($node['config']['scope']??'')==='national');
+            $national=(bool)array_filter($graph->nodes,static fn($node)=>($node['config']['scope']??'')==='national'||array_filter($node['config']['intervention_rules']??[],static fn($rule)=>$rule['scope']==='national'));
             if((($definition['require_second_approver']??true)!==false||$national)&&$draft['created_by']===$actor){throw new ApiException(403,'second_approver_required','A different authorized publisher must approve this draft.');}
             Sql::run($this->db,'SELECT id FROM categories WHERE id=? FOR UPDATE',[$category['id']]);
             $templates=Sql::run($this->db,'SELECT * FROM workflow_templates WHERE category_id=? FOR UPDATE',[$category['id']])->fetchAll();
@@ -143,14 +143,15 @@ final class WorkflowService
             if(isset($config['sla_minutes'])){BusinessClock::due(new \DateTimeImmutable(),$config['sla_minutes'],$graph->definition['calendar']??[]);}
             if(isset($config['department_id'])&&!Sql::run($this->db,'SELECT 1 FROM departments WHERE id=? AND active',[$config['department_id']])->fetchColumn()){throw new \InvalidArgumentException('Node department is inactive or unavailable.');}
             if(isset($config['position_id'])&&!Sql::run($this->db,'SELECT 1 FROM positions WHERE id=? AND active',[$config['position_id']])->fetchColumn()){throw new \InvalidArgumentException('Node position is inactive or unavailable.');}
+            foreach(['position_ids'=>'positions','user_ids'=>'app_users']as$field=>$table){$ids=$config[$field]??[];foreach($config['intervention_rules']??[]as$rule)$ids=[...$ids,...($rule[$field]??[])];foreach(array_unique($ids)as$id){if(!Sql::run($this->db,"SELECT 1 FROM $table WHERE id=? AND active",[$id])->fetchColumn())throw new \InvalidArgumentException('A configured person or position is inactive or unavailable.');}}
             if(in_array($node['type'],['task','claim_pool','approval'],true)){
                 $national=($config['scope']??'station')==='national';
                 $eligible=Sql::run($this->db,'SELECT 1 FROM app_users actor JOIN staff_assignments sa ON sa.user_id=actor.id JOIN stations st ON st.id=sa.station_id
-                    WHERE actor.active AND st.active AND sa.department_id=CAST(? AS uuid) AND sa.position_id=CAST(? AS uuid)
+                    WHERE actor.active AND st.active AND sa.department_id=CAST(? AS uuid) AND ((CAST(? AS text)<>\'people\' AND (sa.position_id=CAST(? AS uuid) OR jsonb_exists(CAST(? AS jsonb),sa.position_id::text))) OR (CAST(? AS text)<>\'positions\' AND jsonb_exists(CAST(? AS jsonb),actor.id::text)))
                     AND sa.begins_at<=now() AND (sa.ends_at IS NULL OR sa.ends_at>now()) AND '.Access::roleSql('task.claim').
                     " AND EXISTS(SELECT 1 FROM scope_grants g WHERE g.user_id=actor.id AND g.permission_code='task.claim' AND g.revoked_at IS NULL
                         AND g.valid_from<=now() AND (g.valid_to IS NULL OR g.valid_to>now()) AND "
-                        .($national?"g.scope_kind='national'":"(g.scope_kind='national' OR (g.scope_kind='department' AND g.scope_ref_id=sa.department_id) OR (g.scope_kind='station' AND g.scope_ref_id=sa.station_id) OR (g.scope_kind='province' AND g.scope_ref_id=st.province_id))").') LIMIT 1',[$config['department_id'],$config['position_id']])->fetchColumn();
+                        .($national?"g.scope_kind='national'":"(g.scope_kind='national' OR (g.scope_kind='department' AND g.scope_ref_id=sa.department_id) OR (g.scope_kind='station' AND g.scope_ref_id=sa.station_id) OR (g.scope_kind='province' AND g.scope_ref_id=st.province_id))").') LIMIT 1',[$config['department_id'],$config['audience_mode']??'both',$config['position_id'],json_encode($config['position_ids']??[]),$config['audience_mode']??'both',json_encode($config['user_ids']??[])])->fetchColumn();
                 if(!$eligible){throw new \InvalidArgumentException('Task node '.$node['label'].' has no currently authorized position candidates.');}
             }
         }
